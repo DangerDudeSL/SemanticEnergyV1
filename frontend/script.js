@@ -118,7 +118,10 @@ async function sendMessage() {
     setTimeout(() => { statusText.textContent = "Calculating Fermi-Dirac Logit Flows..."; }, 14000);
 
     try {
-        const response = await fetch('http://localhost:8000/chat', {
+        // Auto-detect: use relative URL when deployed, localhost when running locally
+        const isLocal = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+        const apiUrl = isLocal ? 'http://localhost:8000/chat' : '/chat';
+        const response = await fetch(apiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ prompt: prompt, num_samples: 5 })
