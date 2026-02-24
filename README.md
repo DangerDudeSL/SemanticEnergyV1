@@ -137,7 +137,25 @@ curl -X POST http://127.0.0.1:8000/chat \
 
 Semantic Energy requires **per-token logits** from the language model — not just generated text. Most LLM API providers (OpenAI, Anthropic, etc.) don't expose raw logits, which makes them incompatible. The model must be self-hosted with full access to output scores.
 
-### Recommended: Hugging Face Spaces (Free T4 GPU)
+### 🥇 Easiest: Google Colab + ngrok (Free)
+
+The fastest way to get a public URL — no setup, no Docker, no credit card.
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/DangerDudeSL/SemanticEnergyV1/blob/master/SemanticEnergy_Colab.ipynb)
+
+**What you need:**
+1. A Google account (for Colab)
+2. A free [ngrok auth token](https://dashboard.ngrok.com/get-started/your-authtoken)
+
+**Steps:**
+1. Click the **Open in Colab** badge above
+2. Set runtime to **T4 GPU** (Runtime → Change runtime type)
+3. Run all cells — paste your ngrok token when prompted
+4. Get a public URL like `https://abc123.ngrok-free.app` and share it!
+
+> ⚠️ Free Colab sessions last ~12 hours and the URL changes on restart. For a permanent deployment, use Hugging Face Spaces below.
+
+### Alternative: Hugging Face Spaces (Free T4 GPU)
 
 This repo includes a ready-to-deploy `Dockerfile` for [Hugging Face Spaces](https://huggingface.co/spaces). The Qwen 2.5 1.5B model fits comfortably on a free T4 GPU (16 GB VRAM).
 
