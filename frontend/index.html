@@ -5,29 +5,94 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Semantic Energy Chat</title>
-    <link rel="stylesheet" href="styles.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <link rel="stylesheet" href="styles.css?v=15">
 </head>
 
 <body>
     <div class="background-mesh"></div>
 
-    <div class="app-container">
-        <header class="app-header">
-            <h1>Semantic Energy</h1>
-            <p>Powered by Qwen 2.5 & Confidence Logits</p>
-        </header>
+    <!-- Model loading overlay -->
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="loading-card">
+            <div class="loading-spinner"></div>
+            <div class="loading-title">Loading Model</div>
+            <div class="loading-model" id="loading-model-name">Initializing...</div>
+            <div class="loading-hint">This may take a minute on first load</div>
+        </div>
+    </div>
 
+    <nav class="navbar">
+        <div class="navbar-brand">
+            <svg class="brand-icon" width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <path d="M13 2L4.5 13.5H11L10 22L19.5 10.5H13L13 2Z"
+                    fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+            </svg>
+            <span class="brand-name">Semantic Energy</span>
+            <span class="brand-badge">BETA</span>
+        </div>
+        <div class="navbar-controls">
+            <button id="guide-btn" title="Metrics guide" aria-label="Metrics guide">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <circle cx="12" cy="17" r="0.5" fill="currentColor" stroke="currentColor" stroke-width="1"/>
+                </svg>
+            </button>
+            <button id="clear-btn" title="Clear chat history" aria-label="Clear chat history">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                    <polyline points="3 6 5 6 21 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M10 11v6M14 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </button>
+            <div class="custom-dropdown" id="model-dropdown">
+                <button class="dropdown-trigger" id="dropdown-trigger" aria-haspopup="listbox">
+                    <span id="dropdown-label">Llama 3.1 8B</span>
+                    <svg class="dropdown-chevron" viewBox="0 0 24 24" fill="none">
+                        <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+                <div class="dropdown-panel" id="dropdown-panel" role="listbox">
+                    <div class="dropdown-item active" data-model-id="meta-llama/Llama-3.1-8B-Instruct" data-label="Llama 3.1 8B" role="option">
+                        <div class="dropdown-item-info">
+                            <span class="dropdown-item-name">Llama 3.1 8B</span>
+                            <span class="dropdown-item-desc">Better reasoning &amp; semantic depth</span>
+                        </div>
+                        <span class="dropdown-item-badge badge-recommended">Recommended</span>
+                    </div>
+                    <div class="dropdown-item" data-model-id="Qwen/Qwen2.5-1.5B-Instruct" data-label="Qwen 2.5 1.5B" role="option">
+                        <div class="dropdown-item-info">
+                            <span class="dropdown-item-name">Qwen 2.5 1.5B</span>
+                            <span class="dropdown-item-desc">Lightweight, faster responses</span>
+                        </div>
+                        <span class="dropdown-item-badge badge-fast">Fast</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="app-container">
         <main class="chat-container" id="chat-container">
-            <!-- Messages will be injected here -->
-            <div class="message system-message">
+            <div class="message system-message" id="welcome-message">
                 <div class="message-bubble">
-                    Hello! Ask me anything. I calculate my hallucination risk in real-time.
+                    Hello! Ask me anything. I will calculate my own hallucination risk in real-time using Semantic
+                    Energy logit flows.
                 </div>
             </div>
         </main>
 
         <div class="input-area">
+            <div class="mode-selector">
+                <span class="mode-label">Mode</span>
+                <button class="mode-btn active" data-mode="full" title="Full Semantic Energy: 5 generations + LLM clustering (~60–120s)">Full SE</button>
+                <button class="mode-btn" data-mode="slt" title="Fast SLT: 1 generation + forward pass, post-generation probe (~5–15s)">Fast SLT</button>
+                <button class="mode-btn" data-mode="tbg" title="Fast TBG: single forward pass on prompt only, pre-generation probe (~0.5–2s)">Fast TBG ⚡</button>
+            </div>
             <div class="input-wrapper">
                 <textarea id="prompt-input" rows="1" placeholder="Message..." spellcheck="false"></textarea>
                 <button id="send-button" aria-label="Send Message">
@@ -41,7 +106,90 @@
         </div>
     </div>
 
-    <script src="script.js"></script>
+    <!-- Metrics Guide Modal -->
+    <div class="guide-overlay" id="guide-overlay">
+        <div class="guide-modal">
+            <div class="guide-header">
+                <span class="guide-title">Metrics Guide</span>
+                <button class="guide-close" id="guide-close" aria-label="Close guide">&times;</button>
+            </div>
+            <div class="guide-body">
+                <div class="guide-section">
+                    <div class="guide-section-title">Scoring Modes</div>
+                    <div class="guide-item">
+                        <span class="guide-label">Full SE</span>
+                        <span class="guide-desc">Generates 5 diverse responses, clusters them by semantic similarity, then calculates energy flow across clusters. Most thorough but slowest (~60-120s).</span>
+                    </div>
+                    <div class="guide-item">
+                        <span class="guide-label">Fast SLT</span>
+                        <span class="guide-desc">Generates 1 response, then analyzes the second-to-last token's hidden states with a trained probe. Post-generation signal (~5-15s).</span>
+                    </div>
+                    <div class="guide-item">
+                        <span class="guide-label">Fast TBG</span>
+                        <span class="guide-desc">Analyzes the last prompt token's hidden states before any generation. Pre-generation risk estimate (~0.5-2s).</span>
+                    </div>
+                </div>
+                <div class="guide-section">
+                    <div class="guide-section-title">Overall Confidence</div>
+                    <div class="guide-item">
+                        <span class="guide-label">Confidence Badge</span>
+                        <span class="guide-desc">The main hallucination score. In Full SE mode, this comes from cluster energy distribution. In SLT/TBG modes, it comes from trained probes on hidden states. Higher = more likely correct.</span>
+                    </div>
+                </div>
+                <div class="guide-section">
+                    <div class="guide-section-title">Detail Metrics (Probe Modes)</div>
+                    <div class="guide-item">
+                        <span class="guide-label">Energy Risk</span>
+                        <span class="guide-desc">Risk score from the energy probe. Measures if the model's internal state resembles patterns seen in correct vs incorrect answers. Lower = more confident.</span>
+                    </div>
+                    <div class="guide-item">
+                        <span class="guide-label">Entropy Risk</span>
+                        <span class="guide-desc">Risk score from the entropy probe. Captures uncertainty in the model's hidden representations. Lower = less uncertain.</span>
+                    </div>
+                    <div class="guide-item">
+                        <span class="guide-label">Combined Risk</span>
+                        <span class="guide-desc">Average of energy and entropy risk. Used to determine the overall confidence level (High/Medium/Low).</span>
+                    </div>
+                </div>
+                <div class="guide-section">
+                    <div class="guide-section-title">Detail Metrics (Full SE)</div>
+                    <div class="guide-item">
+                        <span class="guide-label">Clusters Found</span>
+                        <span class="guide-desc">Number of semantically distinct answer groups. Fewer clusters = more consistent responses = higher confidence.</span>
+                    </div>
+                    <div class="guide-item">
+                        <span class="guide-label">Cluster Energy</span>
+                        <span class="guide-desc">Normalized energy for each cluster from Fermi-Dirac logit flows. The main answer's cluster energy is the confidence score.</span>
+                    </div>
+                </div>
+                <div class="guide-section">
+                    <div class="guide-section-title">Sentence-Level Analysis</div>
+                    <div class="guide-item">
+                        <span class="guide-label">Sentence Confidence</span>
+                        <span class="guide-desc">Per-sentence score based on the model's raw token logits, mapped through a sigmoid function. Measures how certain the model was about each word choice. Uses absolute thresholds, not relative comparison.</span>
+                    </div>
+                    <div class="guide-item">
+                        <span class="guide-label">Sentence Probe Risk</span>
+                        <span class="guide-desc">Per-sentence hallucination risk from two trained probes (SLT mode only). The energy probe (layers 17-21) detects if the hidden state matches correctness patterns. The entropy probe (layers 20-24) detects internal uncertainty. Both run on hidden states at each sentence's last token and are combined with AUROC-weighted averaging. When available, this overrides the logit-based level for highlighting.</span>
+                    </div>
+                    <div class="guide-item">
+                        <span class="guide-label">Energy vs Entropy Risk</span>
+                        <span class="guide-desc">Energy risk measures whether the model's internal state resembles patterns seen in correct answers (from Full SE clustering). Entropy risk measures internal uncertainty in hidden representations. Combined risk is their weighted average (entropy 51.5%, energy 48.5%, based on validation accuracy). Hover over sentences or analysis rows to see individual probe values.</span>
+                    </div>
+                    <div class="guide-item">
+                        <span class="guide-label">Sentence Avg Conf</span>
+                        <span class="guide-desc">Average of all per-sentence confidence scores. A supplementary signal showing overall logit-level certainty across the full response.</span>
+                    </div>
+                    <div class="guide-item">
+                        <span class="guide-label">Highlighting</span>
+                        <span class="guide-desc">Sentences are tinted in the response bubble. No tint = high confidence (OK). Amber tint = medium confidence (WARN). Red tint = low confidence (RISK). Hover for exact percentage.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js?v=15"></script>
 </body>
 
 </html>

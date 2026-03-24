@@ -2,10 +2,22 @@
 torch>=2.6.0
 transformers>=5.0.0
 accelerate>=1.10.0
+bitsandbytes>=0.43.0
+scipy>=1.14.0
 
 # API Backend
 fastapi>=0.129.0
 uvicorn>=0.41.0
+
+# Probe training and evaluation
+scikit-learn>=1.5.0
+datasets>=3.0.0
+tqdm>=4.66.0
+matplotlib>=3.9.0
+
+# Sentence segmentation (for Phase 6 sentence baseline)
+spacy>=3.7.0
+pysbd>=0.3.4
 
 # Utilities
 requests>=2.32.0

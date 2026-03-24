@@ -5,17 +5,17 @@ echo ============================================
 echo.
 
 :: Check Python
-python --version >nul 2>&1
+py -3.12 --version >nul 2>&1
 if errorlevel 1 (
-    echo [ERROR] Python is not installed or not in PATH.
-    echo Please install Python 3.10+ from https://www.python.org/downloads/
+    echo [ERROR] Python 3.12 is not installed.
+    echo Please install Python 3.12 from https://www.python.org/downloads/
     pause
     exit /b 1
 )
 
 :: Create virtual environment
-echo [1/4] Creating virtual environment...
-python -m venv .venv
+echo [1/4] Creating virtual environment with Python 3.12...
+py -3.12 -m venv .venv
 if errorlevel 1 (
     echo [ERROR] Failed to create virtual environment.
     pause

@@ -1,46 +1,69 @@
 # SemanticEnergy
 
-A real-time LLM hallucination detection system based on the **Semantic Energy** framework — an approach that goes beyond traditional entropy-based methods by using **logit-space energy functions** to quantify uncertainty.
+A real-time LLM hallucination detection system built on the **Semantic Energy** framework — an approach that goes beyond traditional entropy-based methods by using **logit-space energy functions** to quantify uncertainty.
 
 > **Paper**: [Semantic Energy: Detecting LLM Hallucination Beyond Entropy](https://arxiv.org/abs/2508.14496)
 
 ![Framework](semanticenergy.png)
 
+This implementation extends the original paper with **linear probes trained on hidden states**, enabling fast single-pass hallucination scoring without multi-sample generation or clustering.
+
 ---
 
-## 🚀 Getting Started
+## What's in This Repo
 
-### Prerequisites
+| Component | Description |
+|---|---|
+| **Full Semantic Energy** | Original paper method — 5 diverse generations + LLM semantic clustering + Fermi-Dirac energy flow |
+| **Fast TBG Probe** | Pre-generation risk score in ~0.5–2s — reads the model's hidden state at the last prompt token |
+| **Fast SLT Probe** | Post-generation risk score in ~5–15s — reads the hidden state at the second-to-last generated token |
+| **B1 Sentence Baseline** | Per-sentence logit confidence scoring — highlights the lowest-confidence sentence in any response |
+
+---
+
+## Hardware Requirements
 
 | Requirement | Details |
 |---|---|
-| **Python** | 3.10 or higher |
-| **GPU (recommended)** | NVIDIA GPU with CUDA 12.4 — the model runs on CPU too, but will be significantly slower |
-| **VRAM** | ~4 GB minimum (Qwen 2.5 1.5B in fp16) |
-| **Disk Space** | ~5 GB (model weights are downloaded on first run) |
+| **Python** | 3.12 (recommended) |
+| **GPU** | NVIDIA GPU with CUDA 12.4 — **required**, CPU not supported |
+| **VRAM** | 10–12 GB (Llama 3.1 8B in 8-bit quantization) |
+| **Disk Space** | ~10 GB (model weights downloaded on first run) |
+| **RAM** | 16 GB minimum |
 
-### Project Structure
+> Tested on NVIDIA RTX 3060 12 GB. The model loads at ~9 GB VRAM with `bitsandbytes` 8-bit quantization.
+
+---
+
+## Project Structure
 
 ```
 SemanticEnergy/
 ├── backend/
-│   ├── app.py              # FastAPI server with /chat endpoint
-│   └── engine.py           # SemanticEngine: generation, clustering, energy calculation
+│   ├── app.py                  # FastAPI server — /chat, /score_fast_tbg, /score_fast_slt
+│   ├── engine.py               # SemanticEngine: generation, clustering, probes, energy
+│   ├── data/
+│   │   └── probe_dataset_llama3-8b_triviaqa.pkl   # 500-record TriviaQA dataset with hidden states
+│   └── models/
+│       └── probes_llama3-8b_triviaqa.pkl          # Trained probe bundle (4 probes + scalers)
 ├── frontend/
-│   ├── index.html           # Chat UI
-│   ├── script.js            # Frontend logic
-│   └── styles.css           # Styling
-├── semantic_energy.ipynb     # Research notebook with full pipeline
-├── executed_semantic_energy.ipynb  # Pre-executed notebook with outputs
-├── start.ps1                # One-command launcher (Windows/PowerShell)
-├── setup.bat                # Environment setup (Windows)
-├── setup.sh                 # Environment setup (Linux/macOS)
-├── requirements.txt         # Python dependencies
-├── test_endpoint.py         # Quick API test script
+│   ├── index.html              # Chat UI with 3-mode selector
+│   ├── script.js               # Frontend logic
+│   └── styles.css              # Styling
+├── notebooks/
+│   ├── 00_preflight.ipynb      # Formula verification — energy & entropy teacher signals
+│   ├── 01_generate_dataset.ipynb   # Collect 500 TriviaQA records with hidden states
+│   ├── 02_train_se_probes.ipynb    # Train & evaluate 4 probes, save bundle
+│   └── 04_sentence_baseline.ipynb  # B1 per-sentence logit confidence baseline
+├── start.ps1                   # One-command launcher (Windows/PowerShell)
+├── setup.bat                   # Environment setup (Windows)
+├── requirements.txt            # Python dependencies
 └── README.md
 ```
 
-### Quick Setup (Automated)
+---
+
+## Quick Setup
 
 **Windows:**
 ```cmd
@@ -49,153 +72,250 @@ cd SemanticEnergyV1
 setup.bat
 ```
 
-**Linux / macOS:**
-```bash
-git clone https://github.com/DangerDudeSL/SemanticEnergyV1.git
-cd SemanticEnergyV1
-chmod +x setup.sh
-./setup.sh
-```
-
 The setup script will:
-1. Create a Python virtual environment (`.venv`)
-2. Install PyTorch with CUDA 12.4 support (falls back to CPU if no GPU)
+1. Create a Python 3.12 virtual environment (`.venv`)
+2. Install PyTorch with CUDA 12.4 support
 3. Install all remaining dependencies from `requirements.txt`
 
-### Manual Setup
-
-If you prefer to set up manually:
-
+**Manual setup:**
 ```bash
-# 1. Clone the repository
-git clone https://github.com/DangerDudeSL/SemanticEnergyV1.git
-cd SemanticEnergyV1
-
-# 2. Create and activate a virtual environment
 python -m venv .venv
+.venv\Scripts\activate           # Windows
+# source .venv/bin/activate      # Linux/macOS
 
-# Windows
-.venv\Scripts\activate
-
-# Linux/macOS
-source .venv/bin/activate
-
-# 3. Install PyTorch (pick ONE)
-# With CUDA 12.4 (recommended for GPU):
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
-
-# CPU only:
-pip install torch torchvision torchaudio
-
-# 4. Install remaining dependencies
+pip install torch --index-url https://download.pytorch.org/whl/cu124
 pip install -r requirements.txt
-```
-
-### Running the Application
-
-**Windows (PowerShell) — One Command:**
-```powershell
-.\start.ps1
-```
-This launches both the backend (port 8000) and frontend (port 3000) simultaneously.
-
-**Manual Start (any OS):**
-```bash
-# Terminal 1 — Backend
-cd backend
-python app.py
-# API will be available at http://127.0.0.1:8000
-# Swagger docs at http://127.0.0.1:8000/docs
-
-# Terminal 2 — Frontend
-cd frontend
-python -m http.server 3000
-# Open http://127.0.0.1:3000 in your browser
-```
-
-> **Note:** On the first run, the Qwen 2.5 1.5B model (~3 GB) will be automatically downloaded from Hugging Face. Subsequent runs will use the cached model.
-
-### Testing the API
-
-Once the backend is running, you can test it with:
-```bash
-python test_endpoint.py
-```
-
-Or via curl:
-```bash
-curl -X POST http://127.0.0.1:8000/chat \
-  -H "Content-Type: application/json" \
-  -d '{"prompt": "What is the capital of France?", "num_samples": 5}'
 ```
 
 ---
 
-## ☁️ Deploying to the Web
+## Running the Application
 
-### Why Self-Hosted LLM is Required
+**Windows (PowerShell) — one command:**
+```powershell
+.\start.ps1
+```
 
-Semantic Energy requires **per-token logits** from the language model — not just generated text. Most LLM API providers (OpenAI, Anthropic, etc.) don't expose raw logits, which makes them incompatible. The model must be self-hosted with full access to output scores.
+This launches both servers and prints the available scoring modes. The script checks for the probe bundle and warns if fast scoring is unavailable.
 
-### 🥇 Easiest: Google Colab + ngrok (Free)
+**Manual start:**
+```bash
+# Terminal 1 — Backend (loads Llama 3.1 8B, takes ~60s on first run)
+cd backend
+python app.py
+# API at http://127.0.0.1:8000  |  Swagger docs at http://127.0.0.1:8000/docs
 
-The fastest way to get a public URL — no setup, no Docker, no credit card.
+# Terminal 2 — Frontend
+cd frontend
+python -m http.server 3000
+# Open http://127.0.0.1:3000
+```
+
+> **First run:** Llama 3.1 8B Instruct (~16 GB fp16, ~9 GB in 8-bit) is downloaded automatically from Hugging Face. You need a Hugging Face account and must accept the model's license at [meta-llama/Llama-3.1-8B-Instruct](https://huggingface.co/meta-llama/Llama-3.1-8B-Instruct).
+
+---
+
+## Scoring Modes
+
+Select the mode in the UI before sending a message:
+
+### Full SE (Full Semantic Energy)
+`POST /chat`
+
+The original paper method. Generates 5 diverse responses, clusters them semantically using the LLM itself as a verifier, then computes Fermi-Dirac logit energy flows across clusters.
+
+- **Time:** ~60–120s
+- **Signal:** Multi-sample semantic agreement
+- **Output:** Confidence score + number of semantic clusters found
+
+### Fast SLT (Second-to-Last Token probe)
+`POST /score_fast_slt`
+
+Generates one response, then runs a single forward pass on `prompt + answer` to extract the hidden state at the second-to-last generated token. A trained logistic regression probe predicts hallucination risk from that hidden state.
+
+- **Time:** ~5–15s
+- **Signal:** Post-generation internal representation
+- **Output:** Answer + combined risk score
+
+### Fast TBG (Token Before Generation probe)
+`POST /score_fast_tbg`
+
+Runs a single forward pass on the **prompt only** — no generation. Extracts the hidden state at the last prompt token and scores it with a trained probe. This gives a hallucination risk estimate *before the model writes a single word*.
+
+- **Time:** ~0.5–2s
+- **Signal:** Pre-generation internal representation
+- **Output:** Risk score (answer generated afterwards via a follow-up SLT call)
+
+---
+
+## API Reference
+
+All endpoints accept `POST` with JSON body.
+
+### `POST /chat`
+```json
+{ "prompt": "What is the speed of light?", "num_samples": 5, "model_id": "meta-llama/Llama-3.1-8B-Instruct" }
+```
+```json
+{
+  "answer": "The speed of light is approximately 299,792,458 metres per second.",
+  "confidence_score": 0.87,
+  "confidence_level": "high",
+  "clusters_found": 1
+}
+```
+
+### `POST /score_fast_slt`
+```json
+{ "prompt": "What is the speed of light?" }
+```
+```json
+{
+  "mode": "slt_post_generation",
+  "answer": "The speed of light is approximately 299,792,458 metres per second.",
+  "energy_risk": 0.12,
+  "entropy_risk": 0.18,
+  "combined_risk": 0.15,
+  "confidence_level": "high"
+}
+```
+
+### `POST /score_fast_tbg`
+```json
+{ "prompt": "What is the speed of light?" }
+```
+```json
+{
+  "mode": "tbg_pre_generation",
+  "energy_risk": 0.10,
+  "entropy_risk": 0.16,
+  "combined_risk": 0.13,
+  "confidence_level": "high"
+}
+```
+
+---
+
+## Probe Training Pipeline
+
+The fast scoring modes require trained probes. The pre-trained bundle is included at `backend/models/probes_llama3-8b_triviaqa.pkl`. To retrain from scratch:
+
+### Step 1 — Verify formulas
+```
+notebooks/00_preflight.ipynb
+```
+Verifies the energy and entropy teacher signal formulas with synthetic data. No GPU needed.
+
+### Step 2 — Collect dataset
+```
+notebooks/01_generate_dataset.ipynb
+```
+Runs the full Semantic Energy pipeline on 500 TriviaQA questions. For each question it records:
+- 5 generated responses with per-token logits and probabilities
+- Semantic cluster assignments
+- Energy and entropy teacher scores
+- Hidden states at TBG and SLT token positions (all 33 layers)
+
+Saves to `backend/data/probe_dataset_llama3-8b_triviaqa.pkl` (~540 MB).
+**Requires GPU. Estimated time: 4–6 hours.**
+
+### Step 3 — Train probes
+```
+notebooks/02_train_se_probes.ipynb
+```
+- Binarizes teacher scores using SEP-style within-group MSE minimisation (no correctness labels)
+- Sweeps all 33 layers to find the best layer range for each probe
+- Trains 4 logistic regression probes (TBG energy, TBG entropy, SLT energy, SLT entropy)
+- Runs feature ablation and bootstrap AUROC evaluation
+- Saves the probe bundle to `backend/models/probes_llama3-8b_triviaqa.pkl`
+
+**No GPU needed for this notebook.**
+
+### Probe Results (TriviaQA, Llama 3.1 8B Instruct)
+
+| Probe | Best Layers | Val AUROC | Test AUROC |
+|---|---|---|---|
+| TBG Energy | 28–32 | 0.871 | 0.748 |
+| TBG Entropy | 21–25 | 0.869 | 0.786 |
+| SLT Energy | 17–21 | 0.741 | 0.667 |
+| SLT Entropy | 20–24 | 0.793 | 0.788 |
+
+Teacher upper bounds (test set): Energy 0.710, Entropy 0.714.
+
+---
+
+## How Semantic Energy Works
+
+### Step 1 — Sample responses
+
+Generate N diverse responses for a question using sampling (`do_sample=True`). Collect per-token logits and probabilities for each response.
+
+### Step 2 — Semantic clustering
+
+Use the LLM itself as a semantic verifier — for each pair of responses, ask it whether they are semantically equivalent. Greedy decoding (`do_sample=False`) is used here for deterministic decisions. Group semantically equivalent responses into clusters.
+
+### Step 3 — Compute energy
+
+For each cluster, aggregate the token-level logits using a Boltzmann (or Fermi-Dirac) energy function, then weight by cluster probability mass:
+
+```
+energy_cluster_i = -mean(logits for responses in cluster_i)
+cluster_prob_i   = sum(response_probs in cluster_i) / sum(all response_probs)
+SE_score         = sum_normalize(cluster_energies)[main_cluster_index]
+```
+
+Higher SE score = higher confidence = lower hallucination risk.
+
+### Token Positions for Probes
+
+```
+Prompt tokens:  [t1, t2, ..., tN]   ← TBG = hidden state at tN (last prompt token)
+Answer tokens:  [a1, a2, ..., aM, EOS]  ← SLT = hidden state at aM (second-to-last)
+```
+
+Both positions are extracted via a **separate forward pass** on `prompt + answer` using `output_hidden_states=True`, reading all 33 transformer layers. The probe uses a 4-layer window (e.g., layers 21–25) concatenated and flattened as input features.
+
+---
+
+## Deployment
+
+### Why Self-Hosted
+
+Semantic Energy requires **full per-token logits** from the language model. Most API providers expose only top-5 log-probabilities or nothing at all — incompatible with the clustering and probe pipeline.
+
+### Google Colab + ngrok (Free, Easiest)
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/DangerDudeSL/SemanticEnergyV1/blob/master/SemanticEnergy_Colab.ipynb)
 
-**What you need:**
-1. A Google account (for Colab)
-2. A free [ngrok auth token](https://dashboard.ngrok.com/get-started/your-authtoken)
-
-**Steps:**
-1. Click the **Open in Colab** badge above
+1. Click the badge above
 2. Set runtime to **T4 GPU** (Runtime → Change runtime type)
-3. Run all cells — paste your ngrok token when prompted
-4. Get a public URL like `https://abc123.ngrok-free.app` and share it!
+3. Run all cells — paste your [ngrok auth token](https://dashboard.ngrok.com/get-started/your-authtoken) when prompted
+4. Share the generated public URL
 
-> ⚠️ Free Colab sessions last ~12 hours and the URL changes on restart. For a permanent deployment, use Hugging Face Spaces below.
+> Free Colab sessions last ~12 hours. URL changes on restart.
 
-### Alternative: Hugging Face Spaces (Free T4 GPU)
+### Hugging Face Spaces (Free T4 GPU)
 
-This repo includes a ready-to-deploy `Dockerfile` for [Hugging Face Spaces](https://huggingface.co/spaces). The Qwen 2.5 1.5B model fits comfortably on a free T4 GPU (16 GB VRAM).
+A `Dockerfile` is included for deployment to [Hugging Face Spaces](https://huggingface.co/spaces). The 8-bit quantized model (~9 GB) fits on a free T4 (16 GB VRAM).
 
-**Step-by-step:**
+```bash
+git clone https://huggingface.co/spaces/YOUR_USERNAME/YOUR_SPACE_NAME
+cd YOUR_SPACE_NAME
+cp -r /path/to/SemanticEnergyV1/* .
+git add . && git commit -m "Deploy" && git push
+```
 
-1. **Create a new Space** at [huggingface.co/new-space](https://huggingface.co/new-space)
-   - Select **Docker** as the SDK
-   - Select **T4 small** as hardware (free tier)
-
-2. **Clone your Space and copy the files:**
-   ```bash
-   git clone https://huggingface.co/spaces/YOUR_USERNAME/YOUR_SPACE_NAME
-   cd YOUR_SPACE_NAME
-
-   # Copy the project files
-   cp -r /path/to/SemanticEnergyV1/* .
-   ```
-
-3. **Push to deploy:**
-   ```bash
-   git add .
-   git commit -m "Deploy Semantic Energy"
-   git push
-   ```
-
-4. Your app will be live at `https://YOUR_USERNAME-YOUR_SPACE_NAME.hf.space`
-
-> **Note:** First deployment takes ~5 minutes as it builds the Docker image and downloads the model weights (~3 GB).
-
-### Other GPU Hosting Options
+### Other Options
 
 | Platform | GPU | Cost | Notes |
 |---|---|---|---|
-| **[Hugging Face Spaces](https://huggingface.co/spaces)** | T4 (16 GB) | Free | ✅ Recommended — includes `Dockerfile` |
-| **[Modal](https://modal.com)** | Any | ~$0.10/hr | Serverless, pay-per-second, cold starts |
-| **[RunPod](https://runpod.io)** | Wide selection | ~$0.20/hr | Full control, always-on |
-| **[Vast.ai](https://vast.ai)** | Wide selection | ~$0.10/hr | Cheapest GPU rentals |
-| **[Google Colab + ngrok](https://colab.research.google.com)** | T4 | Free | Good for demos, not permanent |
+| **Hugging Face Spaces** | T4 (16 GB) | Free | Recommended — Dockerfile included |
+| **Modal** | Any | ~$0.10/hr | Serverless, pay-per-second |
+| **RunPod** | Wide selection | ~$0.20/hr | Full control, always-on |
+| **Vast.ai** | Wide selection | ~$0.10/hr | Cheapest GPU rentals |
+| **Google Colab + ngrok** | T4 | Free | Good for demos |
 
-### What About LLM APIs?
+### API Compatibility
 
 | Provider | Logits Available? | Compatible? |
 |---|---|---|
@@ -207,129 +327,9 @@ This repo includes a ready-to-deploy `Dockerfile` for [Hugging Face Spaces](http
 
 ---
 
-## 📖 How It Works
+## Citation
 
-For specific implementations, please refer to the code in the notebook. We have uploaded all the intermediate results generated by the models in the `cache_data` [Google Drive](https://drive.google.com/file/d/16ykjWpLV1bY82IRFpvMhzHyKIq9Me02J/view?usp=sharing) directory to facilitate the reproduction of experiments.
-
-### Step 1: Sampling Response
-
-Similar to semantic entropy, for a given question, it is necessary to first sample multiple responses. You can refer to the following code to save the required content:
-
-```
-messages = [
-    {"role": "user", "content": question}
-    ]
-generated_prompt = tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=True
-        ) 
-inputs = tokenizer(generated_prompt, return_tensors='pt')
-inputs = {k: v.to(model.device) for k, v in inputs.items()}
-generated_output = model.generate(
-    inputs["input_ids"],
-    attention_mask=inputs["attention_mask"],
-    max_new_tokens=args.max_tokens,
-    temperature=args.temperature,
-    top_p=args.top_p,
-    top_k=args.top_k,
-    do_sample=True,
-    return_dict_in_generate=True,
-    output_scores=True,
-)
-
-# Extract the generated token ids (excluding the prompt)
-generated_ids = generated_output.sequences[0][len(inputs["input_ids"][0]):].tolist()
-scores = generated_output.scores  # List[tensor: (batch, vocab_size)], len == num_generated_tokens
-logits_list = []
-probs_list = []
-token_ids = []
-
-for step_idx, score_tensor in enumerate(scores):
-
-    """Example: the next-token probability distribution is {'token_id_1': '0.75', 'token_id_2': '0.22', ...},
-    the next-token logit distribution is {'token_id_1': '35', 'token_id_2': '28', ...},
-    suppose the sampled token is 'token_id_2' """
-
-    logits = score_tensor[0].tolist()  # (vocab_size,)
-    token_id = generated_ids[step_idx]
-    prob = F.softmax(score_tensor[0], dim=-1)[token_id].item()
-    logits_list.append(logits[token_id])  # Save the logit value corresponding to 'token_id_2': 28,
-    probs_list.append(prob)              # Save the probability value corresponding to 'token_id_2': 0.22,
-    token_ids.append(token_id)           # Save the value :'token_id_2'
-
-```
-### Step 2: Semantic Clustering
-
-You can refer to the following code to cluster the different generated responses. Here, we take ```TIGER-Lab/general-verifier``` as an example to analyze semantics, though you can also use other models:
-
-```
-class SemanticAnalyser:
-    def __init__(self, model_path="TIGER-Lab/general-verifier"):
-        self.tokenizer = AutoTokenizer.from_pretrained(model_path)
-        self.model = AutoModelForCausalLM.from_pretrained(
-            model_path, torch_dtype=torch.float16
-        ).cuda()
-
-    def semantic_analyse(self, question, answer_a, answer_b):
-        prompt = (
-            f"User: ### Question: {question}\n\n"
-            f"### Ground Truth Answer: {answer_a}\n\n"
-            f"### Student Answer: {answer_b}\n\n"
-            "For the above question, please verify if the student's answer is equivalent to the ground truth answer.\n"
-            "Do not solve the question by yourself; just check if the student's answer is equivalent to the ground truth answer.\n"
-            "If the student's answer is correct, output \"Final Decision: Yes\". If the student's answer is incorrect, output \"Final Decision: No\". Assistant:"
-        )
-
-        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
-        outputs = self.model.generate(
-            **inputs,
-            max_new_tokens=2025,
-            pad_token_id=self.tokenizer.eos_token_id,
-            do_sample=False
-        )
-        print(self.tokenizer.decode(outputs[0][-3:], skip_special_tokens=True))
-        return self.tokenizer.decode(outputs[0][-3:], skip_special_tokens=True)
-
-def find_semantic_clusters(question, answer_list, analyser):
-    def is_semantic_same(i, j):
-        return "Yes" in analyser.semantic_analyse(question, answer_list[i], answer_list[j])
-    
-    n = len(answer_list)
-    clusters = []
-    visited = [False] * n
-    for i in range(n):
-        if visited[i]:
-            continue
-        cluster = [i]
-        visited[i] = True
-        
-        for j in range(i + 1, n):
-            if not visited[j] and is_semantic_same(i, j):
-                cluster.append(j)
-                visited[j] = True
-        clusters.append(tuple(cluster))
-    print(len(clusters), f"Clusters: {clusters}")
-    return clusters
-
-analyser = SemanticAnalyser()
-
-```
-
-### Step 3: Uncertainty Estimation
-The final step is to calculate the Semantic Energy. This paradigm is generally consistent with Semantic Entropy, with the primary difference being that the probability used for estimating uncertainty is replaced with logits. For the code, please refer to ```semantic_energy.ipynb```.
-
-**Reliability of a single response:**
-The reliability of a single response is equal to the reliability of the cluster it belongs to. For example, if a question is answered 5 times, and the answers are semantically clustered as ```(answer1, answer2, answer3)``` and ```(answer4, answer5)```, then we can compute the energies of the two clusters, namely ```energy_cluster1``` and ```energy_cluster2```. Consequently, the reliability of ```answer1, answer2, answer3``` is given by the value computed from ```energy_cluster1```, while the reliability of ```answer4, answer5``` is given by the value computed from ```energy_cluster2```.
-
-
-### Contact Us
-You can get in touch with us by sending an email to the corresponding author. If the corresponding author receives the email, they will convey its contents to me. For a faster response, you can directly raise an issue in this project, and I will do my best to reply to your question on the same day.
-
-
-### Citation
-
-```
+```bibtex
 @article{ma2025semantic,
   title={Semantic Energy: Detecting LLM Hallucination Beyond Entropy},
   author={Ma, Huan and Pan, Jiadong and Liu, Jing and Chen, Yan and Joey Tianyi Zhou and Wang, Guangyu and Hu, Qinghua and Wu, Hua and Zhang, Changqing and Wang, Haifeng},
@@ -337,3 +337,5 @@ You can get in touch with us by sending an email to the corresponding author. If
   year={2025}
 }
 ```
+
+For questions or issues, please open a GitHub issue.
