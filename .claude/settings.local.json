@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(py -3 -c \":*)",
+      "Bash(python -c \"import torch; print\\(''CUDA:'', torch.cuda.is_available\\(\\)\\); import pysbd; print\\(''pysbd OK''\\); import fastapi; print\\(''fastapi OK''\\)\")",
+      "Bash(python -m uvicorn backend.app:app --host 0.0.0.0 --port 8000)",
+      "Bash(curl -s http://localhost:8000/health)"
+    ]
+  }
+}

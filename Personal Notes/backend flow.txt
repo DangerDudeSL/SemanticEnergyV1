@@ -1,0 +1,66 @@
+User asks: "Tell me about Sigiriya"
+    │
+    ▼
+Step 1: GENERATE — Llama produces an answer
+    │   "Sigiriya is an ancient rock fortress in Sri Lanka..."
+    │   Also captures: token logits, probabilities, top-2 logits
+    │
+    ▼
+Step 2: SEGMENT — pysbd splits answer into sentences
+    │   Sentence 1: "Sigiriya is an ancient rock fortress in Sri Lanka."
+    │   Sentence 2: "It was built by King Kashyapa in the 5th century."
+    │   Sentence 3: "Here are some key facts:"
+    │   ...
+    │
+    ▼
+Step 3: CLAIM FILTER — regex checks which sentences have factual claims
+    │   Sentence 1: ✓ claim
+    │   Sentence 2: ✓ claim
+    │   Sentence 3: ✗ filler (skip)
+    │
+    ▼
+Step 4: LOGIT SCORING — sigmoid on per-token logits for each sentence
+    │   Sentence 1: mean_logit=35.2 → confidence=0.83 (HIGH)
+    │   Sentence 2: mean_logit=34.1 → confidence=0.77 (HIGH)
+    │   (This is WEAK — can't catch confident hallucinations)
+    │
+    ▼
+Step 5: HIDDEN STATE EXTRACTION — one forward pass on (prompt + answer)
+    │   Llama re-processes the full text with output_hidden_states=True
+    │   Extract hidden states at:
+    │     - Second-to-last token (global SLT position)
+    │     - Last token of each claim sentence (per-sentence positions)
+    │   Each extraction = (33 layers, 4096 dims) tensor
+    │
+    ▼
+Step 6: PROBE SCORING — pkl classifiers read the hidden states
+    │
+    │   For each claim sentence's hidden state:
+    │     ┌─ Energy probe reads layers 17-21 (4 layers × 4096 = 16,384 features)
+    │     │  → predict_proba → confidence 0.72 → risk = 1 - 0.72 = 0.28
+    │     │
+    │     └─ Entropy probe reads layers 20-24 (4 layers × 4096 = 16,384 features)
+    │        → predict_proba → risk = 0.31
+    │     
+    │     Combined: 0.485 × 0.28 + 0.515 × 0.31 = 0.296 (probe_risk)
+    │
+    │   The probes are just sklearn .predict_proba() calls — microseconds each
+    │
+    ▼
+Step 7: AGGREGATE — combine into final score
+    │   Short answer (≤100 tokens): use global SLT probe directly
+    │   Long answer (>100 tokens): blend per-sentence probe risks
+    │
+    ▼
+Step 8: RETURN JSON to frontend
+    {
+      "answer": "Sigiriya is an ancient rock fortress...",
+      "combined_risk": 0.31,
+      "confidence_level": "high",
+      "sentence_scores": [
+        { "text": "Sigiriya is...", "confidence": 0.83,
+          "energy_risk": 0.28, "entropy_risk": 0.31,
+          "probe_risk": 0.296, "level": "high", "is_claim": true },
+        ...
+      ]
+    }

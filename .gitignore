@@ -36,3 +36,10 @@ Desktop.ini
 
 # Environment variables
 .env
+backend/data/checkpoint_100.pkl
+backend/data/checkpoint_200.pkl
+backend/data/checkpoint_300.pkl
+backend/data/checkpoint_350.pkl
+backend/data/checkpoint_400.pkl
+backend/data/checkpoint_450.pkl
+backend/data/checkpoint_500.pkl
