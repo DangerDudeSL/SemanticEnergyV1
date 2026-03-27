@@ -33,11 +33,12 @@ PROBE_BUNDLES = {
 }
 
 def _patch_sklearn_compat(bundle):
-    """Fix probes trained with scikit-learn <1.6 running on >=1.6 (multi_class removed)."""
+    """Fix sklearn version gaps: some versions removed multi_class from __init__
+    but still reference it in predict_proba. Ensure the attribute always exists."""
     for key in bundle:
         obj = bundle[key]
-        if hasattr(obj, 'predict_proba') and hasattr(obj, 'multi_class'):
-            delattr(obj, 'multi_class')
+        if hasattr(obj, 'predict_proba') and not hasattr(obj, 'multi_class'):
+            obj.multi_class = 'auto'
 
 def load_probe_bundle(model_id):
     """Load the probe bundle for a given model_id. Returns None if not available."""
