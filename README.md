@@ -42,43 +42,35 @@ SemanticEnergy/
 ├── backend/
 │   ├── app.py                  # FastAPI server — /chat, /score_fast_tbg, /score_fast_slt
 │   ├── engine.py               # SemanticEngine: generation, clustering, probes, energy
-│   ├── data/
-│   │   └── probe_dataset_llama3-8b_triviaqa.pkl   # 500-record TriviaQA dataset with hidden states
+│   ├── claim_filter.py         # Claim sentence filtering
+│   ├── data/                   # Generated datasets & checkpoints (gitignored)
 │   └── models/
-│       └── probes_llama3-8b_triviaqa.pkl          # Trained probe bundle (4 probes + scalers)
+│       ├── probes_llama3-8b_triviaqa.pkl   # Trained probes for Llama 3.1 8B
+│       └── probes_qwen3-8b_triviaqa.pkl    # Trained probes for Qwen3 8B
 ├── frontend/
-│   ├── index.html              # Chat UI with 3-mode selector
-│   ├── script.js               # Frontend logic
-│   └── styles.css              # Styling
+│   ├── index.html              # Chat UI with 3-mode selector + metrics guide
+│   ├── script.js               # Frontend logic + score history chart
+│   ├── styles.css              # Styling
+│   └── vercel.json             # Vercel deployment config
 ├── notebooks/
 │   ├── 00_preflight.ipynb      # Formula verification — energy & entropy teacher signals
 │   ├── 01_generate_dataset.ipynb   # Collect 500 TriviaQA records with hidden states
 │   ├── 02_train_se_probes.ipynb    # Train & evaluate 4 probes, save bundle
 │   └── 04_sentence_baseline.ipynb  # B1 per-sentence logit confidence baseline
-├── start.ps1                   # One-command launcher (Windows/PowerShell)
-├── setup.bat                   # Environment setup (Windows)
+├── SemanticEnergy_Colab.ipynb  # Colab deployment notebook (backend on free T4 GPU)
+├── start.ps1                   # One-command local launcher (Windows/PowerShell)
 ├── requirements.txt            # Python dependencies
 └── README.md
 ```
 
 ---
 
-## Quick Setup
+## Quick Setup (Local)
 
-**Windows:**
-```cmd
+```bash
 git clone https://github.com/DangerDudeSL/SemanticEnergyV1.git
 cd SemanticEnergyV1
-setup.bat
-```
 
-The setup script will:
-1. Create a Python 3.12 virtual environment (`.venv`)
-2. Install PyTorch with CUDA 12.4 support
-3. Install all remaining dependencies from `requirements.txt`
-
-**Manual setup:**
-```bash
 python -m venv .venv
 .venv\Scripts\activate           # Windows
 # source .venv/bin/activate      # Linux/macOS
@@ -89,25 +81,21 @@ pip install -r requirements.txt
 
 ---
 
-## Running the Application
+## Running Locally
 
 **Windows (PowerShell) — one command:**
 ```powershell
 .\start.ps1
 ```
 
-This launches both servers and prints the available scoring modes. The script checks for the probe bundle and warns if fast scoring is unavailable.
-
 **Manual start:**
 ```bash
 # Terminal 1 — Backend (loads Llama 3.1 8B, takes ~60s on first run)
-cd backend
-python app.py
-# API at http://127.0.0.1:8000  |  Swagger docs at http://127.0.0.1:8000/docs
+cd backend && python app.py
+# API at http://127.0.0.1:8000
 
 # Terminal 2 — Frontend
-cd frontend
-python -m http.server 3000
+cd frontend && python -m http.server 3000
 # Open http://127.0.0.1:3000
 ```
 
@@ -277,53 +265,62 @@ Both positions are extracted via a **separate forward pass** on `prompt + answer
 
 ---
 
-## Deployment
+## Cloud Deployment (Vercel + Google Colab)
+
+The recommended deployment architecture for demos and testing. **Total cost: $0.**
+
+```
+┌──────────────────┐                          ┌─────────────────────────┐
+│  Vercel (FREE)   │        HTTPS/JSON        │  Google Colab (FREE)    │
+│                  │ ──────────────────────>   │                         │
+│  index.html      │                          │  FastAPI (app.py)       │
+│  script.js       │   ngrok static domain    │  engine.py              │
+│  styles.css      │ <──────────────────────  │  probes.pkl (from HF)   │
+│                  │                          │  Llama 3.1 8B on T4     │
+│  Permanent URL   │                          │  12h session (restart)  │
+└──────────────────┘                          └─────────────────────────┘
+```
+
+### Step 1: Set Up ngrok (one-time)
+
+1. Sign up at [ngrok.com](https://ngrok.com) (free)
+2. Copy your auth token from [dashboard.ngrok.com](https://dashboard.ngrok.com/get-started/your-authtoken)
+3. Note your free static domain from [dashboard.ngrok.com/domains](https://dashboard.ngrok.com/domains) (e.g. `abc123.ngrok-free.dev`)
+
+### Step 2: Deploy Frontend to Vercel (one-time)
+
+1. Sign up at [vercel.com](https://vercel.com) (use GitHub login)
+2. Import the `SemanticEnergy` GitHub repo
+3. Set **root directory** to `frontend/`
+4. Deploy — gives you a permanent URL like `semantic-energy.vercel.app`
+5. In `frontend/script.js`, set `BACKEND_URL` to your ngrok static domain:
+   ```javascript
+   const BACKEND_URL = 'https://abc123.ngrok-free.dev';
+   ```
+
+### Step 3: Start Backend on Colab (each session)
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/DangerDudeSL/SemanticEnergyV1/blob/master/SemanticEnergy_Colab.ipynb)
+
+1. Open the Colab notebook (click badge above)
+2. Set runtime to **T4 GPU** (Runtime -> Change runtime type)
+3. Fill in your ngrok token and static domain in the config cell
+4. Run all cells — backend starts with all endpoints
+5. Open your Vercel URL in a browser
+
+> The frontend is always online. Only the Colab backend needs manual start per session (~60-90s to load the model).
 
 ### Why Self-Hosted
 
 Semantic Energy requires **full per-token logits** from the language model. Most API providers expose only top-5 log-probabilities or nothing at all — incompatible with the clustering and probe pipeline.
 
-### Google Colab + ngrok (Free, Easiest)
-
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/DangerDudeSL/SemanticEnergyV1/blob/master/SemanticEnergy_Colab.ipynb)
-
-1. Click the badge above
-2. Set runtime to **T4 GPU** (Runtime → Change runtime type)
-3. Run all cells — paste your [ngrok auth token](https://dashboard.ngrok.com/get-started/your-authtoken) when prompted
-4. Share the generated public URL
-
-> Free Colab sessions last ~12 hours. URL changes on restart.
-
-### Hugging Face Spaces (Free T4 GPU)
-
-A `Dockerfile` is included for deployment to [Hugging Face Spaces](https://huggingface.co/spaces). The 8-bit quantized model (~9 GB) fits on a free T4 (16 GB VRAM).
-
-```bash
-git clone https://huggingface.co/spaces/YOUR_USERNAME/YOUR_SPACE_NAME
-cd YOUR_SPACE_NAME
-cp -r /path/to/SemanticEnergyV1/* .
-git add . && git commit -m "Deploy" && git push
-```
-
-### Other Options
-
-| Platform | GPU | Cost | Notes |
-|---|---|---|---|
-| **Hugging Face Spaces** | T4 (16 GB) | Free | Recommended — Dockerfile included |
-| **Modal** | Any | ~$0.10/hr | Serverless, pay-per-second |
-| **RunPod** | Wide selection | ~$0.20/hr | Full control, always-on |
-| **Vast.ai** | Wide selection | ~$0.10/hr | Cheapest GPU rentals |
-| **Google Colab + ngrok** | T4 | Free | Good for demos |
-
-### API Compatibility
-
 | Provider | Logits Available? | Compatible? |
 |---|---|---|
-| **OpenAI** | Top-5 logprobs only | ❌ Insufficient |
-| **Anthropic** | No | ❌ |
-| **Google Gemini** | No | ❌ |
-| **Together AI** | Full logprobs | ⚠️ Possible with code changes |
-| **Self-hosted vLLM** | Full logits | ✅ Fully compatible |
+| **OpenAI** | Top-5 logprobs only | No |
+| **Anthropic** | No | No |
+| **Google Gemini** | No | No |
+| **Together AI** | Full logprobs | Possible with code changes |
+| **Self-hosted vLLM** | Full logits | Fully compatible |
 
 ---
 

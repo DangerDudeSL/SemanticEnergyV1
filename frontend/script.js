@@ -1,3 +1,15 @@
+// ── API Configuration ────────────────────────────────────────────────────────
+// For local development: leave empty (auto-detects localhost:8000)
+// For Vercel + Colab deployment: set to your ngrok static domain, e.g.:
+//   const BACKEND_URL = 'https://your-domain.ngrok-free.dev';
+const BACKEND_URL = 'https://nickelic-deserved-nilda.ngrok-free.dev';
+
+function getBaseUrl() {
+    if (BACKEND_URL) return BACKEND_URL;
+    const isLocal = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+    return isLocal ? 'http://localhost:8000' : '';
+}
+
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const promptInput    = document.getElementById('prompt-input');
 const sendButton     = document.getElementById('send-button');
@@ -10,6 +22,109 @@ const dropdownLabel  = document.getElementById('dropdown-label');
 // ── State ─────────────────────────────────────────────────────────────────────
 let selectedMode    = 'full';
 let selectedModelId = 'meta-llama/Llama-3.1-8B-Instruct';
+
+// ── Hallucination score history ──────────────────────────────────────────────
+let scoreHistory = [];
+
+function restoreScoreHistory() {
+    try {
+        const saved = sessionStorage.getItem('se_score_history');
+        if (saved) scoreHistory = JSON.parse(saved);
+    } catch (_) { scoreHistory = []; }
+}
+
+function persistScoreHistory() {
+    sessionStorage.setItem('se_score_history', JSON.stringify(scoreHistory));
+}
+
+function recordScore(question, combinedRisk, mode) {
+    scoreHistory.push({
+        q: question.length > 40 ? question.substring(0, 40) + '...' : question,
+        risk: combinedRisk,
+        conf: 1.0 - combinedRisk,
+        mode: mode,
+        ts: Date.now(),
+    });
+    persistScoreHistory();
+    renderScoreChart();
+}
+
+function renderScoreChart() {
+    const chartContainer = document.getElementById('score-chart-container');
+    const chartCanvas = document.getElementById('score-chart');
+    if (!chartContainer || !chartCanvas) return;
+    if (scoreHistory.length === 0) {
+        chartContainer.classList.add('empty');
+        chartCanvas.innerHTML = '<div class="chart-empty">No scores yet. Ask questions to see the trend.</div>';
+        return;
+    }
+    chartContainer.classList.remove('empty');
+
+    const W = chartCanvas.clientWidth || 480;
+    const H = 140;
+    const pad = { top: 20, right: 16, bottom: 28, left: 40 };
+    const plotW = W - pad.left - pad.right;
+    const plotH = H - pad.top - pad.bottom;
+    const n = scoreHistory.length;
+
+    // Build points
+    const points = scoreHistory.map((s, i) => ({
+        x: pad.left + (n === 1 ? plotW / 2 : (i / (n - 1)) * plotW),
+        y: pad.top + (1 - s.conf) * plotH,
+        conf: s.conf,
+        risk: s.risk,
+        q: s.q,
+        mode: s.mode,
+    }));
+
+    // Confidence zone backgrounds
+    const yHigh = pad.top;
+    const yMedTop = pad.top + 0.35 * plotH;
+    const yMedBot = pad.top + 0.65 * plotH;
+    const yLow = pad.top + plotH;
+
+    let svg = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`;
+    // Zone fills
+    svg += `<rect x="${pad.left}" y="${yHigh}" width="${plotW}" height="${yMedTop - yHigh}" fill="rgba(52,199,89,0.07)"/>`;
+    svg += `<rect x="${pad.left}" y="${yMedTop}" width="${plotW}" height="${yMedBot - yMedTop}" fill="rgba(255,159,10,0.07)"/>`;
+    svg += `<rect x="${pad.left}" y="${yMedBot}" width="${plotW}" height="${yLow - yMedBot}" fill="rgba(255,69,58,0.07)"/>`;
+    // Zone labels
+    svg += `<text x="${pad.left - 4}" y="${(yHigh + yMedTop) / 2 + 3}" text-anchor="end" font-size="9" fill="#34c759" opacity="0.8">HIGH</text>`;
+    svg += `<text x="${pad.left - 4}" y="${(yMedTop + yMedBot) / 2 + 3}" text-anchor="end" font-size="9" fill="#ff9f0a" opacity="0.8">MED</text>`;
+    svg += `<text x="${pad.left - 4}" y="${(yMedBot + yLow) / 2 + 3}" text-anchor="end" font-size="9" fill="#ff453a" opacity="0.8">LOW</text>`;
+    // Grid lines
+    svg += `<line x1="${pad.left}" y1="${yMedTop}" x2="${pad.left + plotW}" y2="${yMedTop}" stroke="rgba(0,0,0,0.08)" stroke-dasharray="3,3"/>`;
+    svg += `<line x1="${pad.left}" y1="${yMedBot}" x2="${pad.left + plotW}" y2="${yMedBot}" stroke="rgba(0,0,0,0.08)" stroke-dasharray="3,3"/>`;
+    // Axes
+    svg += `<line x1="${pad.left}" y1="${pad.top}" x2="${pad.left}" y2="${yLow}" stroke="rgba(0,0,0,0.12)"/>`;
+    svg += `<line x1="${pad.left}" y1="${yLow}" x2="${pad.left + plotW}" y2="${yLow}" stroke="rgba(0,0,0,0.12)"/>`;
+
+    // Line path
+    if (n > 1) {
+        const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+        svg += `<path d="${pathD}" fill="none" stroke="#0A84FF" stroke-width="2" stroke-linejoin="round"/>`;
+    }
+
+    // Dots with tooltips
+    points.forEach((p, i) => {
+        const color = p.conf >= 0.65 ? '#34c759' : p.conf >= 0.35 ? '#ff9f0a' : '#ff453a';
+        svg += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4.5" fill="${color}" stroke="white" stroke-width="1.5">`;
+        svg += `<title>Q${i + 1}: ${p.q}\nConfidence: ${(p.conf * 100).toFixed(1)}%\nMode: ${p.mode}</title>`;
+        svg += `</circle>`;
+    });
+
+    // X-axis labels
+    points.forEach((p, i) => {
+        if (n <= 15 || i % Math.ceil(n / 10) === 0 || i === n - 1) {
+            svg += `<text x="${p.x.toFixed(1)}" y="${H - 4}" text-anchor="middle" font-size="10" fill="rgba(0,0,0,0.4)">Q${i + 1}</text>`;
+        }
+    });
+
+    svg += '</svg>';
+    chartCanvas.innerHTML = svg;
+}
+
+restoreScoreHistory();
 
 const loadingOverlay   = document.getElementById('loading-overlay');
 const loadingModelName = document.getElementById('loading-model-name');
@@ -30,8 +145,7 @@ function hideLoadingOverlay() {
 }
 
 async function pollBackendStatus() {
-    const isLocal = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
-    const baseUrl = isLocal ? 'http://localhost:8000' : '';
+    const baseUrl = getBaseUrl();
 
     const poll = async () => {
         try {
@@ -176,6 +290,19 @@ document.querySelectorAll('.mode-btn').forEach(btn => {
     });
 });
 
+// ── Score history chart modal ─────────────────────────────────────────────────
+const chartOverlay = document.getElementById('chart-overlay');
+document.getElementById('chart-btn').addEventListener('click', () => {
+    renderScoreChart();
+    chartOverlay.classList.add('open');
+});
+document.getElementById('chart-close').addEventListener('click', () => {
+    chartOverlay.classList.remove('open');
+});
+chartOverlay.addEventListener('click', (e) => {
+    if (e.target === chartOverlay) chartOverlay.classList.remove('open');
+});
+
 // ── Metrics guide modal ──────────────────────────────────────────────────────
 const guideOverlay = document.getElementById('guide-overlay');
 document.getElementById('guide-btn').addEventListener('click', () => {
@@ -194,6 +321,9 @@ document.getElementById('clear-btn').addEventListener('click', () => {
     const messages = chatContainer.querySelectorAll('.message');
     messages.forEach((m, i) => { if (i > 0) m.remove(); });
     sessionStorage.removeItem('se_chat');
+    scoreHistory = [];
+    sessionStorage.removeItem('se_score_history');
+    renderScoreChart();
 });
 
 // ── Textarea auto-resize ──────────────────────────────────────────────────────
@@ -567,8 +697,7 @@ async function sendMessage() {
 
     statusText.style.color = '';
 
-    const isLocal = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
-    const baseUrl = isLocal ? 'http://localhost:8000' : '';
+    const baseUrl = getBaseUrl();
 
     const startTime = Date.now();
     let interval = null;
@@ -612,6 +741,7 @@ async function sendMessage() {
                 sentence_avg_confidence: data.sentence_avg_confidence,
             });
             appendSentenceAnalysis(msgEl, data.sentence_scores);
+            recordScore(prompt, 1.0 - (data.confidence_score || 0.5), 'Full SE');
 
         } else if (selectedMode === 'slt') {
             // ── Fast SLT ──────────────────────────────────────────────────────
@@ -624,7 +754,8 @@ async function sendMessage() {
             });
             if (!response.ok) throw new Error(`Server error ${response.status}`);
             const data = await response.json();
-            if (data.error) throw new Error(data.error);
+            // Non-fatal: backend may return a warning (e.g. short answer) with valid fallback scores
+            if (data.error && !data.answer) throw new Error(data.error);
 
             const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
             const msgEl = addMessageWithSentenceScores(data.answer || '(No response received)', data.sentence_scores);
@@ -642,6 +773,7 @@ async function sendMessage() {
                 sentence_avg_confidence: data.sentence_avg_confidence,
             });
             appendSentenceAnalysis(msgEl, data.sentence_scores);
+            recordScore(prompt, data.combined_risk, 'Fast SLT');
 
         } else if (selectedMode === 'tbg') {
             // ── Fast TBG (two-phase) ──────────────────────────────────────────
@@ -666,7 +798,8 @@ async function sendMessage() {
             });
             if (!sltResponse.ok) throw new Error(`Server error ${sltResponse.status}`);
             const sltData = await sltResponse.json();
-            if (sltData.error) throw new Error(sltData.error);
+            // Non-fatal: backend may return a warning (e.g. short answer) with valid fallback scores
+            if (sltData.error && !sltData.answer) throw new Error(sltData.error);
 
             const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
             const msgEl = addMessageWithSentenceScores(sltData.answer || '(No response received)', sltData.sentence_scores);
@@ -684,6 +817,7 @@ async function sendMessage() {
                 sentence_avg_confidence: sltData.sentence_avg_confidence,
             });
             appendSentenceAnalysis(msgEl, sltData.sentence_scores);
+            recordScore(prompt, tbgData.combined_risk, 'Fast TBG');
         }
 
         persistMessages();

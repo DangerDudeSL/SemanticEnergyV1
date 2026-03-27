@@ -40,6 +40,9 @@ Desktop.ini
 # Wireframes (design assets, not code)
 wireframes/
 
+# Vercel
+.vercel/
+
 # Checkpoint files (intermediate training data — regeneratable)
 backend/data/checkpoint_*.pkl
 

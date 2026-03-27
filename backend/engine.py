@@ -359,7 +359,10 @@ class SemanticEngine:
         extra_positions are token indices relative to the answer start (0-based).
         Returns (None, None, []) if the answer is too short.
         """
-        messages = [{"role": "user", "content": question}]
+        # Use user-only template to match probe training data (no system prompt)
+        messages = [
+            {"role": "user", "content": question},
+        ]
         prompt_only = self._safe_apply_chat_template(self.tokenizer, messages, tokenize=False, add_generation_prompt=True)
 
         prompt_ids = self.tokenizer(prompt_only, return_tensors="pt").input_ids
@@ -408,7 +411,10 @@ class SemanticEngine:
             entropy_risk: float in [0,1] — hallucination risk from entropy probe
             confidence_level: "high" | "medium" | "low"
         """
-        messages = [{"role": "user", "content": question}]
+        # Use user-only template to match probe training data (no system prompt)
+        messages = [
+            {"role": "user", "content": question},
+        ]
         prompt_text = self._safe_apply_chat_template(self.tokenizer, messages, tokenize=False, add_generation_prompt=True)
         inputs = self.tokenizer(prompt_text, return_tensors="pt").to("cuda:0")
         prompt_len = inputs.input_ids.shape[1]
@@ -598,9 +604,23 @@ class SemanticEngine:
         answer_token_count = len(token_ids)
 
         if answer_token_count <= TOKEN_THRESHOLD:
-            # SHORT ANSWER: SLT probe trained on this range — use it directly
-            combined_risk = (energy_risk + entropy_risk) / 2.0
-            print(f"[SLT] Short answer ({answer_token_count} tokens <= {TOKEN_THRESHOLD}): using SLT-direct aggregate", flush=True)
+            slt_combined = (energy_risk + entropy_risk) / 2.0
+
+            per_sent_risks = [s["probe_risk"] for s in sentence_scores
+                              if s.get("probe_risk") is not None and s.get("is_claim", True)]
+
+            if len(per_sent_risks) >= 2:
+                # 2+ claim sentences: SLT token only captures state at the end,
+                # so blend with per-sentence probes to represent all claims
+                mean_sent_risk = sum(per_sent_risks) / len(per_sent_risks)
+                combined_risk = 0.5 * slt_combined + 0.5 * mean_sent_risk
+                print(f"[SLT] Short answer ({answer_token_count} tok, {len(per_sent_risks)} claims): "
+                      f"blended (slt={slt_combined:.3f}, sent_mean={mean_sent_risk:.3f}) -> {combined_risk:.3f}", flush=True)
+            else:
+                # 0-1 claim sentences: SLT probe covers the whole answer adequately
+                combined_risk = slt_combined
+                print(f"[SLT] Short answer ({answer_token_count} tok, {len(per_sent_risks)} claims): "
+                      f"SLT-direct -> {combined_risk:.3f}", flush=True)
         else:
             # LONG ANSWER: SLT unreliable, rely heavily on per-sentence probe risks
             per_sent_risks = [s["probe_risk"] for s in sentence_scores

@@ -1005,3 +1005,76 @@ body {
     line-height: 1.55;
     color: #6e6e73;
 }
+
+.guide-desc code {
+    background: rgba(10, 132, 255, 0.08);
+    color: #0A84FF;
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+/* ── Score History Chart ───────────────────────────────────────────── */
+.chart-modal {
+    max-width: 640px;
+}
+
+.score-chart-container {
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.015);
+    overflow: hidden;
+}
+
+.score-chart {
+    width: 100%;
+    min-height: 140px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.score-chart svg {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.chart-empty {
+    font-size: 13px;
+    color: var(--text-secondary);
+    text-align: center;
+    padding: 40px 20px;
+}
+
+.chart-legend {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    margin-top: 12px;
+    flex-wrap: wrap;
+}
+
+.chart-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.chart-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.chart-note {
+    font-size: 12px;
+    color: var(--text-secondary);
+    text-align: center;
+    margin-top: 8px;
+    line-height: 1.5;
+}
