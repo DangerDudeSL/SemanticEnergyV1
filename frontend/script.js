@@ -7,6 +7,16 @@ function getBaseUrl() {
     return isLocal ? 'http://localhost:8000' : NGROK_DOMAIN;
 }
 
+// Wrapper around fetch that adds the ngrok-skip-browser-warning header
+// (required for free ngrok domains, otherwise ngrok returns an interstitial HTML page)
+function apiFetch(url, options = {}) {
+    options.headers = {
+        ...options.headers,
+        'ngrok-skip-browser-warning': 'true',
+    };
+    return fetch(url, options);
+}
+
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const promptInput    = document.getElementById('prompt-input');
 const sendButton     = document.getElementById('send-button');
@@ -146,7 +156,7 @@ async function pollBackendStatus() {
 
     const poll = async () => {
         try {
-            const res = await fetch(`${baseUrl}/status`);
+            const res = await apiFetch(`${baseUrl}/status`);
             const data = await res.json();
             if (data.ready) {
                 hideLoadingOverlay();
@@ -260,7 +270,7 @@ document.querySelectorAll('.dropdown-item').forEach(item => {
         const isLocal = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
         const baseUrl = isLocal ? 'http://localhost:8000' : '';
         try {
-            const res = await fetch(`${baseUrl}/switch_model`, {
+            const res = await apiFetch(`${baseUrl}/switch_model`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ model_id: newModelId }),
@@ -713,7 +723,7 @@ async function sendMessage() {
             t1 = setTimeout(() => { statusText.textContent = "Running Semantic Verifier Model...";      }, 7000);
             t2 = setTimeout(() => { statusText.textContent = "Calculating Fermi-Dirac Logit Flows..."; }, 14000);
 
-            const response = await fetch(`${baseUrl}/chat`, {
+            const response = await apiFetch(`${baseUrl}/chat`, {
                 method:  'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body:    JSON.stringify({ prompt, num_samples: 5, model_id: selectedModelId }),
@@ -744,7 +754,7 @@ async function sendMessage() {
             // ── Fast SLT ──────────────────────────────────────────────────────
             statusText.textContent = "Generating response for SLT probe scoring...";
 
-            const response = await fetch(`${baseUrl}/score_fast_slt`, {
+            const response = await apiFetch(`${baseUrl}/score_fast_slt`, {
                 method:  'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body:    JSON.stringify({ prompt }),
@@ -776,7 +786,7 @@ async function sendMessage() {
             // ── Fast TBG (two-phase) ──────────────────────────────────────────
             statusText.textContent = "Phase 1/2 — Pre-generation TBG probe...";
 
-            const tbgResponse = await fetch(`${baseUrl}/score_fast_tbg`, {
+            const tbgResponse = await apiFetch(`${baseUrl}/score_fast_tbg`, {
                 method:  'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body:    JSON.stringify({ prompt }),
@@ -788,7 +798,7 @@ async function sendMessage() {
 
             statusText.textContent = "Phase 2/2 — Generating response...";
 
-            const sltResponse = await fetch(`${baseUrl}/score_fast_slt`, {
+            const sltResponse = await apiFetch(`${baseUrl}/score_fast_slt`, {
                 method:  'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body:    JSON.stringify({ prompt }),
