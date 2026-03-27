@@ -32,6 +32,13 @@ PROBE_BUNDLES = {
     "Qwen/Qwen3-8B": "probes_qwen3-8b_triviaqa.pkl",
 }
 
+def _patch_sklearn_compat(bundle):
+    """Fix probes trained with scikit-learn <1.6 running on >=1.6 (multi_class removed)."""
+    for key in bundle:
+        obj = bundle[key]
+        if hasattr(obj, 'predict_proba') and hasattr(obj, 'multi_class'):
+            delattr(obj, 'multi_class')
+
 def load_probe_bundle(model_id):
     """Load the probe bundle for a given model_id. Returns None if not available."""
     filename = PROBE_BUNDLES.get(model_id)
@@ -44,6 +51,7 @@ def load_probe_bundle(model_id):
         return None
     with open(path, "rb") as f:
         bundle = pickle.load(f)
+    _patch_sklearn_compat(bundle)
     print(f"[App] Probe bundle loaded: {path}", flush=True)
     return bundle
 
