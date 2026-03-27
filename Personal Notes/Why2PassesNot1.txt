@@ -1,0 +1,31 @@
+It's 2 forward passes, not 1. Here's why:
+
+Pass 1: Generate the answer
+
+Input:  [system prompt] + [user question]
+Mode:   model.generate() — autoregressive, token by token
+Output: answer text + per-token logits/probs (captured during generation)
+GPU:    This is the slow part (~5-10s)
+During generation, the model produces tokens one at a time. We capture logits and probabilities as they're generated. But we don't get access to the full hidden states at every layer — model.generate() doesn't expose them efficiently.
+
+Pass 2: Extract hidden states
+
+Input:  [system prompt] + [user question] + [generated answer from Pass 1]
+Mode:   model() forward pass — single shot, output_hidden_states=True
+Output: hidden states at all 33 layers for every token position
+GPU:    Faster (~1-2s, single forward pass, no generation)
+We feed the entire conversation (prompt + answer) back through the model in one shot. This time we're not generating anything — we just want to read the internal hidden state tensors. From those, we extract:
+
+Global SLT position (second-to-last answer token)
+Per-sentence positions (last token of each claim sentence)
+Then the tiny sklearn probes read those hidden states on CPU (microseconds).
+
+Why not combine them?
+You'd think we could grab hidden states during generation (Pass 1). The problem is:
+
+model.generate() produces tokens autoregressively — each token only sees previous tokens
+Hidden states at token position N during generation don't include information about tokens N+1, N+2, etc.
+In Pass 2, when we feed the complete text, every token position has attention over the entire sequence — the hidden states are richer and more contextually informed
+So the second pass gives us better hidden states because each position now "knows" the full answer.
+
+You can verify this in engine.py:340-387 — _extract_hidden_states() does the second forward pass.

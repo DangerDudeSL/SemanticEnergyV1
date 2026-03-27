@@ -36,10 +36,12 @@ Desktop.ini
 
 # Environment variables
 .env
-backend/data/checkpoint_100.pkl
-backend/data/checkpoint_200.pkl
-backend/data/checkpoint_300.pkl
-backend/data/checkpoint_350.pkl
-backend/data/checkpoint_400.pkl
-backend/data/checkpoint_450.pkl
-backend/data/checkpoint_500.pkl
+
+# Wireframes (design assets, not code)
+wireframes/
+
+# Checkpoint files (intermediate training data — regeneratable)
+backend/data/checkpoint_*.pkl
+
+# Large probe datasets (regeneratable via notebook)
+backend/data/probe_dataset_*.pkl

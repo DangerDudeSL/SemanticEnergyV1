@@ -1,0 +1,6 @@
+2. What Does "RC" Mean?
+RC = "Reading Comprehension". TriviaQA has two configs on HuggingFace:
+
+rc — The full dataset with Wikipedia + search evidence documents (~650K triples). We only use the questions/answers, not the evidence passages (the LLM generates answers from parametric memory, not from provided context).
+unfiltered — Larger, noisier version
+The rc config is the standard one used in the original TriviaQA paper and in the Semantic Entropy paper. Keep using rc.

@@ -91,10 +91,21 @@ class SemanticEngine:
         self._sentence_segmenter = pysbd.Segmenter(language='en', clean=False)
         self._claim_filter = ClaimFilter()
 
+    @staticmethod
+    def _safe_apply_chat_template(tokenizer, messages, **kwargs):
+        """Apply chat template with enable_thinking=False for Qwen3, with fallback for other models."""
+        try:
+            return tokenizer.apply_chat_template(messages, enable_thinking=False, **kwargs)
+        except TypeError:
+            return tokenizer.apply_chat_template(messages, **kwargs)
+
     def generate_responses(self, question, num_samples=5):
         """Generates multiple responses one at a time and extracts tokens, probs, and raw logits."""
-        messages = [{"role": "user", "content": question}]
-        prompt = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        messages = [
+            {"role": "system", "content": "Answer the question directly and concisely. Do not explain your reasoning."},
+            {"role": "user", "content": question},
+        ]
+        prompt = self._safe_apply_chat_template(self.tokenizer, messages, tokenize=False, add_generation_prompt=True)
         
         generated_data = []
         
@@ -302,13 +313,13 @@ class SemanticEngine:
             )}
         ]
         
-        prompt = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        prompt = self._safe_apply_chat_template(self.tokenizer, messages, tokenize=False, add_generation_prompt=True)
         inputs = self.tokenizer(prompt, return_tensors="pt").to("cuda:0")
         
         with torch.no_grad():
             outputs = self.model.generate(
                 **inputs,
-                max_new_tokens=20,
+                max_new_tokens=50,
                 pad_token_id=self.tokenizer.eos_token_id,
                 do_sample=False
             )
@@ -349,7 +360,7 @@ class SemanticEngine:
         Returns (None, None, []) if the answer is too short.
         """
         messages = [{"role": "user", "content": question}]
-        prompt_only = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        prompt_only = self._safe_apply_chat_template(self.tokenizer, messages, tokenize=False, add_generation_prompt=True)
 
         prompt_ids = self.tokenizer(prompt_only, return_tensors="pt").input_ids
         prompt_len = prompt_ids.shape[1]
@@ -398,7 +409,7 @@ class SemanticEngine:
             confidence_level: "high" | "medium" | "low"
         """
         messages = [{"role": "user", "content": question}]
-        prompt_text = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        prompt_text = self._safe_apply_chat_template(self.tokenizer, messages, tokenize=False, add_generation_prompt=True)
         inputs = self.tokenizer(prompt_text, return_tensors="pt").to("cuda:0")
         prompt_len = inputs.input_ids.shape[1]
 
