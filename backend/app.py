@@ -24,7 +24,28 @@ current_model_id = None
 probe_bundle = None
 loading_model_id = None   # set while a model is being loaded
 
-PROBE_BUNDLE_PATH = os.path.join(os.path.dirname(__file__), "models", "probes_llama3-8b_triviaqa.pkl")
+MODELS_DIR = os.path.join(os.path.dirname(__file__), "models")
+
+# Model-to-probe mapping: each model with trained probes gets an entry
+PROBE_BUNDLES = {
+    "meta-llama/Llama-3.1-8B-Instruct": "probes_llama3-8b_triviaqa.pkl",
+    "Qwen/Qwen3-8B": "probes_qwen3-8b_triviaqa.pkl",
+}
+
+def load_probe_bundle(model_id):
+    """Load the probe bundle for a given model_id. Returns None if not available."""
+    filename = PROBE_BUNDLES.get(model_id)
+    if not filename:
+        print(f"[App] No probe bundle configured for {model_id} — fast scoring unavailable.", flush=True)
+        return None
+    path = os.path.join(MODELS_DIR, filename)
+    if not os.path.exists(path):
+        print(f"[App] Probe bundle not found at {path} — fast scoring unavailable.", flush=True)
+        return None
+    with open(path, "rb") as f:
+        bundle = pickle.load(f)
+    print(f"[App] Probe bundle loaded: {path}", flush=True)
+    return bundle
 
 @app.on_event("startup")
 async def startup_event():
@@ -39,13 +60,8 @@ async def startup_event():
         loading_model_id = None
         print("[App] Backend is READY to accept requests!", flush=True)
 
-        # Load probe bundle if available (needed for /score_fast_* endpoints)
-        if os.path.exists(PROBE_BUNDLE_PATH):
-            with open(PROBE_BUNDLE_PATH, "rb") as f:
-                probe_bundle = pickle.load(f)
-            print(f"[App] Probe bundle loaded from {PROBE_BUNDLE_PATH}", flush=True)
-        else:
-            print(f"[App] No probe bundle at {PROBE_BUNDLE_PATH} — fast scoring unavailable.", flush=True)
+        # Load probe bundle for the default model
+        probe_bundle = load_probe_bundle(current_model_id)
 
     except Exception as e:
         print(f"[App] FATAL ERROR during startup: {e}", flush=True)
@@ -67,7 +83,7 @@ async def switch_model_endpoint(request: Request):
     from engine import SemanticEngine
     import torch
 
-    global engine, current_model_id, loading_model_id
+    global engine, current_model_id, loading_model_id, probe_bundle
     try:
         data = await request.json()
         requested_model = data.get("model_id", "")
@@ -93,6 +109,10 @@ async def switch_model_endpoint(request: Request):
         current_model_id = requested_model
         engine = SemanticEngine(model_id=current_model_id)
         loading_model_id = None
+
+        # Load the matching probe bundle for the new model
+        probe_bundle = load_probe_bundle(current_model_id)
+
         print(f"[App] Model {current_model_id} is READY!", flush=True)
         return {"status": "loaded", "model_id": current_model_id}
 
@@ -106,7 +126,7 @@ async def chat_endpoint(request: Request):
     from engine import cal_flow, sum_normalize, SemanticEngine
     import torch
     
-    global engine, current_model_id, loading_model_id
+    global engine, current_model_id, loading_model_id, probe_bundle
     if engine is None:
         return JSONResponse({"error": "Model is still loading, please wait..."}, status_code=503)
 
@@ -135,6 +155,10 @@ async def chat_endpoint(request: Request):
             current_model_id = requested_model
             engine = SemanticEngine(model_id=current_model_id)
             loading_model_id = None
+
+            # Load the matching probe bundle for the new model
+            probe_bundle = load_probe_bundle(current_model_id)
+
             print(f"[App] Successfully swapped to {current_model_id}!", flush=True)
         
         if not user_prompt:
