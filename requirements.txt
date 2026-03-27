@@ -10,7 +10,7 @@ fastapi>=0.129.0
 uvicorn>=0.41.0
 
 # Probe training and evaluation
-scikit-learn>=1.5.0,<1.6.0
+scikit-learn>=1.5.0
 datasets>=3.0.0
 tqdm>=4.66.0
 matplotlib>=3.9.0

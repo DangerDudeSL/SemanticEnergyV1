@@ -1,13 +1,10 @@
 // ── API Configuration ────────────────────────────────────────────────────────
-// For local development: leave empty (auto-detects localhost:8000)
-// For Vercel + Colab deployment: set to your ngrok static domain, e.g.:
-//   const BACKEND_URL = 'https://your-domain.ngrok-free.dev';
-const BACKEND_URL = 'https://nickelic-deserved-nilda.ngrok-free.dev';
+// For Vercel + Colab deployment: set to your ngrok static domain
+const NGROK_DOMAIN = 'https://nickelic-deserved-nilda.ngrok-free.dev';
 
 function getBaseUrl() {
-    if (BACKEND_URL) return BACKEND_URL;
     const isLocal = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
-    return isLocal ? 'http://localhost:8000' : '';
+    return isLocal ? 'http://localhost:8000' : NGROK_DOMAIN;
 }
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
