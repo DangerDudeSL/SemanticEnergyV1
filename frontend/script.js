@@ -267,14 +267,14 @@ document.querySelectorAll('.dropdown-item').forEach(item => {
 
         // Trigger model switch on backend with loading overlay
         showLoadingOverlay(newModelId);
-        const isLocal = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
-        const baseUrl = isLocal ? 'http://localhost:8000' : '';
+        const baseUrl = getBaseUrl();
         try {
             const res = await apiFetch(`${baseUrl}/switch_model`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ model_id: newModelId }),
             });
+            if (!res.ok) throw new Error(`Server error ${res.status}`);
             const data = await res.json();
             if (data.error) throw new Error(data.error);
             hideLoadingOverlay();
@@ -557,25 +557,21 @@ function appendMetricsPanel(messageEl, metricsData) {
     panel.hidden = true;
 
     if (metricsData.type === 'probe') {
-        [
-            ['Energy risk',   metricsData.energy_risk],
-            ['Entropy risk',  metricsData.entropy_risk],
-            ['Combined risk', metricsData.combined_risk],
-        ].forEach(([label, val]) => {
-            panel.appendChild(buildMetricRow(label, val.toFixed(3), val * 100));
-        });
+        // Probe modes (SLT/TBG): show only sentence avg confidence
+        if (metricsData.sentence_avg_confidence != null) {
+            const avgConf = metricsData.sentence_avg_confidence;
+            panel.appendChild(buildMetricRow('Sentence avg conf', (avgConf * 100).toFixed(1) + '%', avgConf * 100));
+        }
     } else {
-        // Full SE
+        // Full SE: cluster breakdown + sentence avg conf
         panel.appendChild(buildMetricRow('Clusters found', String(metricsData.clusters_found), null));
         (metricsData.energies || []).forEach((e, i) => {
             panel.appendChild(buildMetricRow(`Cluster ${i + 1} energy`, e.toFixed(3), e * 100));
         });
-    }
-
-    // Sentence-averaged logit confidence (available in all modes)
-    if (metricsData.sentence_avg_confidence != null) {
-        const avgConf = metricsData.sentence_avg_confidence;
-        panel.appendChild(buildMetricRow('Sentence avg conf', (avgConf * 100).toFixed(1) + '%', avgConf * 100));
+        if (metricsData.sentence_avg_confidence != null) {
+            const avgConf = metricsData.sentence_avg_confidence;
+            panel.appendChild(buildMetricRow('Sentence avg conf', (avgConf * 100).toFixed(1) + '%', avgConf * 100));
+        }
     }
 
     toggle.addEventListener('click', () => {
@@ -735,7 +731,7 @@ async function sendMessage() {
             const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
             const msgEl = addMessageWithSentenceScores(data.answer || '(No response received)', data.sentence_scores);
             appendConfidenceBadge(msgEl, {
-                score:    data.confidence_score,
+                score:    data.sentence_avg_confidence != null ? data.sentence_avg_confidence : data.confidence_score,
                 level:    data.confidence_level,
                 clusters: data.clusters_found,
                 mode:     'Full SE',
@@ -767,7 +763,7 @@ async function sendMessage() {
             const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
             const msgEl = addMessageWithSentenceScores(data.answer || '(No response received)', data.sentence_scores);
             appendConfidenceBadge(msgEl, {
-                score: 1.0 - data.combined_risk,
+                score: data.sentence_avg_confidence != null ? data.sentence_avg_confidence : (1.0 - data.combined_risk),
                 level: data.confidence_level,
                 mode:  'Fast SLT',
             });
@@ -811,8 +807,8 @@ async function sendMessage() {
             const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
             const msgEl = addMessageWithSentenceScores(sltData.answer || '(No response received)', sltData.sentence_scores);
             appendConfidenceBadge(msgEl, {
-                score: 1.0 - tbgData.combined_risk,
-                level: tbgData.confidence_level,
+                score: sltData.sentence_avg_confidence != null ? sltData.sentence_avg_confidence : (1.0 - tbgData.combined_risk),
+                level: sltData.confidence_level || tbgData.confidence_level,
                 mode:  'Fast TBG ⚡',
             });
             appendTimer(msgEl, elapsed);

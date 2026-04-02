@@ -671,13 +671,6 @@ class SemanticEngine:
             print(f"[SLT] No per-sentence data ({answer_token_count} tok): "
                   f"SLT-direct -> {combined_risk:.3f}", flush=True)
 
-        if combined_risk < 0.35:
-            level = "high"
-        elif combined_risk < 0.65:
-            level = "medium"
-        else:
-            level = "low"
-
         # Sentence-averaged confidence (claim sentences only, probe-adjusted)
         valid_confs = []
         for s in sentence_scores:
@@ -688,6 +681,23 @@ class SemanticEngine:
             elif s.get("confidence") is not None:
                 valid_confs.append(s["confidence"])
         sentence_avg_confidence = float(np.mean(valid_confs)) if valid_confs else None
+
+        # Confidence level driven by sentence-average confidence (primary metric)
+        if sentence_avg_confidence is not None:
+            if sentence_avg_confidence >= 0.65:
+                level = "high"
+            elif sentence_avg_confidence >= 0.35:
+                level = "medium"
+            else:
+                level = "low"
+        else:
+            # Fallback when no sentence data
+            if combined_risk < 0.35:
+                level = "high"
+            elif combined_risk < 0.65:
+                level = "medium"
+            else:
+                level = "low"
 
         return {
             "mode": "slt_post_generation",

@@ -204,19 +204,34 @@ async def chat_endpoint(request: Request):
         cluster_energies = sum_normalize(logits_se)
         main_confidence = cluster_energies[main_cluster_idx]
         
-        if main_confidence > 0.80:
-            confidence_level = "high"
-        elif main_confidence > 0.50:
-            confidence_level = "medium"
-        else:
-            confidence_level = "low"
-            
-        print(f"Main answer confidence: {main_confidence:.2f} ({confidence_level})", flush=True)
-
-        # Sentence-averaged confidence (claim sentences only)
-        valid_confs = [s["confidence"] for s in sentence_scores
-                       if s["confidence"] is not None and s.get("is_claim", True)]
+        # Sentence-averaged confidence (claim sentences only, probe-adjusted)
+        valid_confs = []
+        for s in sentence_scores:
+            if not s.get("is_claim", True):
+                continue
+            if s.get("probe_risk") is not None:
+                valid_confs.append(1.0 - s["probe_risk"])
+            elif s.get("confidence") is not None:
+                valid_confs.append(s["confidence"])
         sentence_avg_confidence = float(sum(valid_confs) / len(valid_confs)) if valid_confs else None
+
+        # Confidence level driven by sentence-average confidence (primary metric)
+        if sentence_avg_confidence is not None:
+            if sentence_avg_confidence >= 0.65:
+                confidence_level = "high"
+            elif sentence_avg_confidence >= 0.35:
+                confidence_level = "medium"
+            else:
+                confidence_level = "low"
+        else:
+            if main_confidence > 0.80:
+                confidence_level = "high"
+            elif main_confidence > 0.50:
+                confidence_level = "medium"
+            else:
+                confidence_level = "low"
+
+        print(f"Main answer confidence: {main_confidence:.2f} ({confidence_level})", flush=True)
 
         return {
             "answer": main_answer,
