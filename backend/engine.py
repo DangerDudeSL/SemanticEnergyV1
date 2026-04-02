@@ -603,13 +603,23 @@ class SemanticEngine:
                 sentence_scores[si]["energy_risk"] = round(sent_energy_risk, 4) if sent_energy_risk is not None else None
                 sentence_scores[si]["entropy_risk"] = round(sent_entropy_risk, 4) if sent_entropy_risk is not None else None
 
-                # Combined risk: AUROC-weighted average
+                # Combined risk: probe (0.9) + logit confidence as risk (0.1)
                 if sent_energy_risk is not None and sent_entropy_risk is not None:
-                    probe_risk = W_ENTROPY * sent_entropy_risk + W_ENERGY * sent_energy_risk
+                    probe_only = W_ENTROPY * sent_entropy_risk + W_ENERGY * sent_energy_risk
                 elif sent_entropy_risk is not None:
-                    probe_risk = sent_entropy_risk
+                    probe_only = sent_entropy_risk
                 elif sent_energy_risk is not None:
-                    probe_risk = sent_energy_risk
+                    probe_only = sent_energy_risk
+                else:
+                    probe_only = None
+
+                # Blend in logit confidence (inverted to risk) with 10% weight
+                logit_conf = sentence_scores[si].get("confidence")
+                if probe_only is not None and logit_conf is not None:
+                    logit_risk = 1.0 - logit_conf
+                    probe_risk = 0.9 * probe_only + 0.1 * logit_risk
+                elif probe_only is not None:
+                    probe_risk = probe_only
                 else:
                     probe_risk = None
 

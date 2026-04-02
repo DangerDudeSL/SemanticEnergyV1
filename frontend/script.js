@@ -561,6 +561,9 @@ function appendMetricsPanel(messageEl, metricsData) {
         if (metricsData.sentence_avg_confidence != null) {
             const avgConf = metricsData.sentence_avg_confidence;
             panel.appendChild(buildMetricRow('Sentence avg conf', (avgConf * 100).toFixed(1) + '%', avgConf * 100));
+        } else {
+            // Nothing to show (e.g. single-sentence answer) — skip Details entirely
+            return;
         }
     } else {
         // Full SE: cluster breakdown + sentence avg conf
