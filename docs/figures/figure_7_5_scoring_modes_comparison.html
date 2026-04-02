@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Figure 7.5 — Three Scoring Modes Comparison</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Times New Roman', Georgia, serif;
+    background: #fff;
+    display: flex;
+    justify-content: center;
+    padding: 30px 20px;
+  }
+  .diagram { width: 940px; }
+  .caption {
+    text-align: center;
+    font-size: 11px;
+    color: #333;
+    margin-top: 18px;
+    font-style: italic;
+    line-height: 1.5;
+    max-width: 880px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .columns {
+    display: flex;
+    gap: 12px;
+  }
+
+  .column {
+    flex: 1;
+    border: 2px solid #333;
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  .col-header {
+    padding: 12px 16px;
+    text-align: center;
+    color: #fff;
+    font-weight: bold;
+    font-size: 13px;
+  }
+  .col-header .sub {
+    font-weight: normal;
+    font-size: 10px;
+    opacity: 0.9;
+    display: block;
+    margin-top: 2px;
+  }
+
+  .col-full .col-header { background: #2e7d32; }
+  .col-slt .col-header { background: #e67e22; }
+  .col-tbg .col-header { background: #1976d2; }
+
+  .col-body {
+    padding: 10px 12px;
+  }
+
+  .proc-step {
+    border: 1.5px solid #ddd;
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-bottom: 6px;
+    font-size: 10.5px;
+    line-height: 1.4;
+    position: relative;
+  }
+  .proc-step .step-label {
+    font-weight: bold;
+    font-size: 11px;
+    margin-bottom: 2px;
+  }
+  .proc-step .step-detail {
+    color: #555;
+    font-size: 9.5px;
+  }
+
+  /* Active steps */
+  .step-active {
+    background: #f8f8f8;
+    border-color: #999;
+  }
+
+  /* Skipped steps */
+  .step-skipped {
+    background: #fafafa;
+    border-color: #eee;
+    color: #bbb;
+    position: relative;
+  }
+  .step-skipped .step-label { color: #ccc; }
+  .step-skipped .step-detail { color: #ddd; }
+  .step-skipped::after {
+    content: "SKIPPED";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-15deg);
+    font-size: 14px;
+    font-weight: bold;
+    color: #e0e0e0;
+    letter-spacing: 3px;
+  }
+
+  /* Color coding active steps per mode */
+  .col-full .step-active { border-left: 4px solid #2e7d32; }
+  .col-slt .step-active { border-left: 4px solid #e67e22; }
+  .col-tbg .step-active { border-left: 4px solid #1976d2; }
+
+  .result-box {
+    border: 2px solid #333;
+    border-radius: 6px;
+    padding: 8px 10px;
+    text-align: center;
+    margin-top: 4px;
+    font-size: 10.5px;
+  }
+  .result-box .step-label { font-size: 11px; }
+
+  .col-full .result-box { background: #e8f5e9; border-color: #2e7d32; }
+  .col-slt .result-box { background: #fff3e0; border-color: #e67e22; }
+  .col-tbg .result-box { background: #e3f2fd; border-color: #1976d2; }
+
+  .time-badge {
+    display: inline-block;
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 10px;
+    font-weight: bold;
+    margin-top: 4px;
+  }
+  .col-full .time-badge { background: #c8e6c9; color: #1b5e20; }
+  .col-slt .time-badge { background: #ffe0b2; color: #e65100; }
+  .col-tbg .time-badge { background: #bbdefb; color: #0d47a1; }
+
+  .fw-count {
+    font-size: 9px;
+    color: #777;
+    text-align: center;
+    margin-top: 4px;
+  }
+</style>
+</head>
+<body>
+<div class="diagram">
+  <div class="columns">
+
+    <!-- FULL SE COLUMN -->
+    <div class="column col-full">
+      <div class="col-header">
+        Full Semantic Energy
+        <span class="sub">/chat endpoint</span>
+      </div>
+      <div class="col-body">
+        <div class="proc-step step-active">
+          <div class="step-label">1. Generate 5 Responses</div>
+          <div class="step-detail">Stochastic sampling, temp=0.7<br>Per-token logits &amp; probs captured</div>
+        </div>
+        <div class="proc-step step-active">
+          <div class="step-label">2. B1 Sentence Scoring</div>
+          <div class="step-detail">pysbd split, claim filter<br>Sigmoid logit confidence per sentence</div>
+        </div>
+        <div class="proc-step step-active">
+          <div class="step-label">3. Semantic Clustering</div>
+          <div class="step-detail">Pairwise LLM equivalence check<br>Greedy agglomerative clustering</div>
+        </div>
+        <div class="proc-step step-active">
+          <div class="step-label">4. Energy &amp; Entropy Computation</div>
+          <div class="step-detail">Boltzmann logits &rarr; cluster aggregate<br>Shannon entropy over cluster sizes</div>
+        </div>
+        <div class="proc-step step-skipped">
+          <div class="step-label">5. Hidden State Extraction</div>
+          <div class="step-detail">Not needed — uses full pipeline</div>
+        </div>
+        <div class="proc-step step-skipped">
+          <div class="step-label">6. Probe Scoring</div>
+          <div class="step-detail">Not needed — uses full pipeline</div>
+        </div>
+        <div class="proc-step step-active">
+          <div class="step-label">7. Confidence Mapping</div>
+          <div class="step-detail">energy_score &gt; 0.80 &rarr; high<br>energy_score &gt; 0.50 &rarr; medium</div>
+        </div>
+        <div class="result-box">
+          <div class="step-label">Output</div>
+          <div class="step-detail">answer + energy confidence score<br>+ sentence scores (B1 only)<br>+ cluster debug data</div>
+          <div class="time-badge">60 – 120 seconds</div>
+        </div>
+        <div class="fw-count">Up to 15 forward passes</div>
+      </div>
+    </div>
+
+    <!-- FAST SLT COLUMN -->
+    <div class="column col-slt">
+      <div class="col-header">
+        Fast SLT (Post-Generation)
+        <span class="sub">/score_fast_slt endpoint</span>
+      </div>
+      <div class="col-body">
+        <div class="proc-step step-active">
+          <div class="step-label">1. Generate 1 Response</div>
+          <div class="step-detail">Single generation, same config<br>Per-token logits &amp; probs captured</div>
+        </div>
+        <div class="proc-step step-active">
+          <div class="step-label">2. B1 Sentence Scoring</div>
+          <div class="step-detail">pysbd split, claim filter<br>Sigmoid logit confidence per sentence</div>
+        </div>
+        <div class="proc-step step-skipped">
+          <div class="step-label">3. Semantic Clustering</div>
+          <div class="step-detail">Skipped — only 1 sample</div>
+        </div>
+        <div class="proc-step step-skipped">
+          <div class="step-label">4. Energy &amp; Entropy Computation</div>
+          <div class="step-detail">Skipped — no clusters</div>
+        </div>
+        <div class="proc-step step-active">
+          <div class="step-label">5. Hidden State Extraction</div>
+          <div class="step-detail">Forward pass on (prompt + answer)<br>SLT + per-sentence hidden states</div>
+        </div>
+        <div class="proc-step step-active">
+          <div class="step-label">6. Probe Scoring</div>
+          <div class="step-detail">Overall: SLT energy + entropy probes<br>Per-sentence: dual-probe (AUROC-weighted)<br>W<sub>entropy</sub>=0.515, W<sub>energy</sub>=0.485</div>
+        </div>
+        <div class="proc-step step-active">
+          <div class="step-label">7. Conditional Aggregation</div>
+          <div class="step-detail">Short (≤100 tok): SLT + mean blend<br>Long (&gt;100 tok): weighted combination<br>risk &lt; 0.35 &rarr; high confidence</div>
+        </div>
+        <div class="result-box">
+          <div class="step-label">Output</div>
+          <div class="step-detail">answer + combined risk score<br>+ per-sentence probe risks<br>+ B1 confidence + confidence level</div>
+          <div class="time-badge">5 – 15 seconds</div>
+        </div>
+        <div class="fw-count">2 forward passes (1 gen + 1 extraction)</div>
+      </div>
+    </div>
+
+    <!-- FAST TBG COLUMN -->
+    <div class="column col-tbg">
+      <div class="col-header">
+        Fast TBG (Pre-Generation)
+        <span class="sub">/score_fast_tbg endpoint</span>
+      </div>
+      <div class="col-body">
+        <div class="proc-step step-skipped">
+          <div class="step-label">1. Generate Responses</div>
+          <div class="step-detail">Skipped — no generation needed</div>
+        </div>
+        <div class="proc-step step-skipped">
+          <div class="step-label">2. B1 Sentence Scoring</div>
+          <div class="step-detail">Skipped — no answer to score</div>
+        </div>
+        <div class="proc-step step-skipped">
+          <div class="step-label">3. Semantic Clustering</div>
+          <div class="step-detail">Skipped — no samples</div>
+        </div>
+        <div class="proc-step step-skipped">
+          <div class="step-label">4. Energy &amp; Entropy Computation</div>
+          <div class="step-detail">Skipped — no clusters</div>
+        </div>
+        <div class="proc-step step-active">
+          <div class="step-label">5. Hidden State Extraction</div>
+          <div class="step-detail">Forward pass on prompt only<br>TBG hidden state at last prompt token</div>
+        </div>
+        <div class="proc-step step-active">
+          <div class="step-label">6. Probe Scoring</div>
+          <div class="step-detail">TBG energy probe &rarr; energy_risk<br>TBG entropy probe &rarr; entropy_risk<br>combined = (energy + entropy) / 2</div>
+        </div>
+        <div class="proc-step step-active">
+          <div class="step-label">7. Confidence Mapping</div>
+          <div class="step-detail">risk &lt; 0.35 &rarr; high<br>risk &lt; 0.65 &rarr; medium<br>risk &ge; 0.65 &rarr; low</div>
+        </div>
+        <div class="result-box">
+          <div class="step-label">Output</div>
+          <div class="step-detail">energy risk + entropy risk<br>+ combined risk<br>+ confidence level (no answer)</div>
+          <div class="time-badge">0.5 – 2 seconds</div>
+        </div>
+        <div class="fw-count">1 forward pass (prompt only)</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="caption">
+    <strong>Figure 7.5</strong> — Comparison of the three scoring modes. Each column represents one API endpoint. Numbered steps correspond to the same processing stage;
+    coloured left borders indicate active steps, while greyed-out steps with "SKIPPED" labels are not executed in that mode.
+    Full Semantic Energy executes all pipeline stages (up to 15 forward passes, 60–120s).
+    Fast SLT generates one answer and uses trained probes for risk estimation (2 forward passes, 5–15s).
+    Fast TBG requires no generation at all — a single forward pass on the prompt produces a pre-generation risk score (0.5–2s).
+  </div>
+
+</div>
+</body>
+</html>

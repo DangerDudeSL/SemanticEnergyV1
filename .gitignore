@@ -48,3 +48,13 @@ backend/data/checkpoint_*.pkl
 
 # Large probe datasets (regeneratable via notebook)
 backend/data/probe_dataset_*.pkl
+
+# Benchmark data (large, regeneratable via notebook 06)
+backend/data/benchmark_qwen3-8b_*.pkl
+backend/data/benchmark_results_*.pkl
+
+# Personal notes (may contain tokens/secrets)
+Personal Notes/
+
+# Temp Office lock files
+~$*

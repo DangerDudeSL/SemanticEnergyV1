@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Figure 7.4 — System Architecture Diagram</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Times New Roman', Georgia, serif;
+    background: #fff;
+    display: flex;
+    justify-content: center;
+    padding: 36px 20px;
+  }
+  .diagram { width: 920px; }
+
+  /* ── Tier containers ── */
+  .tier {
+    border: 2.5px solid #ccc;
+    border-radius: 10px;
+    padding: 22px 18px 18px;
+    position: relative;
+  }
+  .tier-label {
+    position: absolute;
+    top: -13px;
+    left: 22px;
+    background: #fff;
+    padding: 0 10px;
+    font-weight: bold;
+    font-size: 13.5px;
+    line-height: 1;
+  }
+  .tier-sublabel {
+    font-size: 10px;
+    color: #888;
+    font-weight: normal;
+    margin-left: 6px;
+  }
+
+  /* Tier accent colours */
+  .tier-frontend { border-color: #3498db; }
+  .tier-frontend .tier-label { color: #3498db; }
+  .tier-frontend .module { border-color: #a8cce2; background: #f0f7fc; }
+
+  .tier-backend { border-color: #27ae60; }
+  .tier-backend .tier-label { color: #27ae60; }
+  .tier-backend .module { border-color: #a8d5b8; background: #f0faf3; }
+
+  .tier-ml { border-color: #e67e22; }
+  .tier-ml .tier-label { color: #e67e22; }
+  .tier-ml .module { border-color: #f0c78e; background: #fef9f0; }
+
+  .tier-training { border-color: #8e44ad; }
+  .tier-training .tier-label { color: #8e44ad; }
+  .tier-training .module { border-color: #c9a8d5; background: #f9f2fd; }
+
+  /* ── Module cards ── */
+  .modules {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 10px;
+  }
+  .module {
+    border: 2px solid #ccc;
+    border-radius: 8px;
+    padding: 12px 14px;
+    text-align: center;
+    background: #fff;
+  }
+  .module-name {
+    font-weight: bold;
+    font-size: 12.5px;
+    margin-bottom: 5px;
+  }
+  .module-file {
+    font-size: 9.5px;
+    font-family: 'Consolas', 'Courier New', monospace;
+    color: #888;
+    margin-bottom: 7px;
+    line-height: 1.4;
+  }
+  .module-desc {
+    font-size: 10px;
+    color: #555;
+    line-height: 1.45;
+  }
+  .module-list {
+    text-align: left;
+    font-size: 9.5px;
+    color: #555;
+    margin-top: 4px;
+    line-height: 1.6;
+    padding-left: 14px;
+  }
+
+  /* ── Connector between tiers ── */
+  .connector {
+    display: flex;
+    justify-content: center;
+    align-items: stretch;
+    gap: 60px;
+    padding: 10px 0;
+  }
+  .connector-arrow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .connector-label {
+    font-size: 9.5px;
+    color: #666;
+    font-style: italic;
+    text-align: center;
+    white-space: nowrap;
+    line-height: 1.3;
+  }
+  .arrow-shaft {
+    width: 2px;
+    flex: 1;
+    min-height: 14px;
+    background: #888;
+  }
+  .arrow-head-down {
+    width: 0; height: 0;
+    border-left: 7px solid transparent;
+    border-right: 7px solid transparent;
+    border-top: 9px solid #888;
+  }
+  .arrow-head-up {
+    width: 0; height: 0;
+    border-left: 7px solid transparent;
+    border-right: 7px solid transparent;
+    border-bottom: 9px solid #888;
+  }
+
+  /* ── Offline training connector (upward, dashed) ── */
+  .offline-connector {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 8px 0;
+    gap: 8px;
+  }
+  .offline-line {
+    border-top: 2px dashed #8e44ad;
+    flex: 0 0 120px;
+  }
+  .offline-label {
+    font-size: 9.5px;
+    color: #8e44ad;
+    font-style: italic;
+    white-space: nowrap;
+  }
+  .offline-arrow-up {
+    width: 0; height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-bottom: 8px solid #8e44ad;
+  }
+
+  /* ── Badges ── */
+  .endpoint-badge {
+    display: inline-block;
+    background: #fff;
+    border: 1.5px solid #27ae60;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 9px;
+    font-family: 'Consolas', 'Courier New', monospace;
+    color: #27ae60;
+    margin: 2px 1px;
+  }
+  .mode-badge {
+    display: inline-block;
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 9px;
+    font-weight: bold;
+    margin: 2px 2px;
+  }
+  .mode-full { background: #e8f5e9; color: #2e7d32; border: 1px solid #2e7d32; }
+  .mode-slt  { background: #fff3e0; color: #e67e22; border: 1px solid #e67e22; }
+  .mode-tbg  { background: #e3f2fd; color: #1976d2; border: 1px solid #1976d2; }
+
+  /* ── Caption ── */
+  .caption {
+    text-align: center;
+    font-size: 11px;
+    color: #333;
+    margin-top: 20px;
+    font-style: italic;
+    line-height: 1.6;
+    border-top: 1px solid #e0e0e0;
+    padding-top: 12px;
+  }
+</style>
+</head>
+<body>
+<div class="diagram">
+
+  <!-- ══ FRONTEND ══ -->
+  <div class="tier tier-frontend">
+    <div class="tier-label">Frontend <span class="tier-sublabel">Vanilla JavaScript SPA</span></div>
+    <div class="modules">
+
+      <div class="module" style="min-width: 210px;">
+        <div class="module-name">Chat Interface</div>
+        <div class="module-file">frontend/index.html</div>
+        <div class="module-desc">User input, message rendering,<br>confidence badge (colour-coded)</div>
+      </div>
+
+      <div class="module" style="min-width: 240px;">
+        <div class="module-name">Application Logic</div>
+        <div class="module-file">frontend/script.js &nbsp;(853 lines)</div>
+        <div class="module-desc" style="margin-bottom:5px;">Mode selector:</div>
+        <div>
+          <span class="mode-badge mode-full">Full SE</span>
+          <span class="mode-badge mode-slt">Fast SLT</span>
+          <span class="mode-badge mode-tbg">Fast TBG</span>
+        </div>
+      </div>
+
+      <div class="module" style="min-width: 210px;">
+        <div class="module-name">Score Visualisation</div>
+        <div class="module-file">frontend/script.js</div>
+        <div class="module-desc">SVG score history chart,<br>per-sentence risk bars,<br>collapsible metrics panel</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Connector: Frontend ↔ Backend ── -->
+  <div class="connector">
+    <div class="connector-arrow">
+      <div class="connector-label">JSON POST request</div>
+      <div class="arrow-shaft"></div>
+      <div class="arrow-head-down"></div>
+    </div>
+    <div class="connector-arrow">
+      <div class="arrow-head-up"></div>
+      <div class="arrow-shaft"></div>
+      <div class="connector-label">JSON response</div>
+    </div>
+  </div>
+
+  <!-- ══ BACKEND ══ -->
+  <div class="tier tier-backend">
+    <div class="tier-label">Backend <span class="tier-sublabel">FastAPI (Python)</span></div>
+    <div class="modules">
+
+      <div class="module" style="min-width: 230px;">
+        <div class="module-name">API Layer</div>
+        <div class="module-file">backend/app.py &nbsp;(297 lines)</div>
+        <div class="module-desc" style="margin-bottom:5px;">Endpoints:</div>
+        <div>
+          <span class="endpoint-badge">POST /chat</span>
+          <span class="endpoint-badge">POST /score_fast_slt</span>
+          <span class="endpoint-badge">POST /score_fast_tbg</span>
+          <span class="endpoint-badge">GET /status</span>
+          <span class="endpoint-badge">POST /switch_model</span>
+        </div>
+      </div>
+
+      <div class="module" style="min-width: 270px;">
+        <div class="module-name">Semantic Engine</div>
+        <div class="module-file">backend/engine.py &nbsp;(671 lines)</div>
+        <ul class="module-list">
+          <li>LLM loading (8-bit quantised)</li>
+          <li>Response generation</li>
+          <li>Semantic clustering</li>
+          <li>Hidden state extraction</li>
+          <li>Probe scoring &amp; risk aggregation</li>
+          <li>Sentence-level B1 confidence</li>
+        </ul>
+      </div>
+
+      <div class="module" style="min-width: 160px;">
+        <div class="module-name">Claim Filter</div>
+        <div class="module-file">backend/claim_filter.py<br>(74 lines)</div>
+        <div class="module-desc">Regex-based sentence<br>classification<br><em>Zero GPU usage</em></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Connector: Backend ↔ ML Layer ── -->
+  <div class="connector">
+    <div class="connector-arrow">
+      <div class="connector-label">model.generate() /<br>model(**inputs)</div>
+      <div class="arrow-shaft"></div>
+      <div class="arrow-head-down"></div>
+    </div>
+    <div class="connector-arrow">
+      <div class="arrow-head-up"></div>
+      <div class="arrow-shaft"></div>
+      <div class="connector-label">logits, hidden_states,<br>token ids</div>
+    </div>
+  </div>
+
+  <!-- ══ ML LAYER ══ -->
+  <div class="tier tier-ml">
+    <div class="tier-label">ML Layer <span class="tier-sublabel">GPU (CUDA)</span></div>
+    <div class="modules">
+
+      <div class="module" style="min-width: 280px;">
+        <div class="module-name">LLM (Transformer)</div>
+        <div class="module-desc">
+          Llama 3.1 8B Instruct / Qwen3 8B<br>
+          BitsAndBytes 8-bit quantisation<br>
+          33 layers &times; 4096 hidden dim &nbsp;|&nbsp; ~8 GB VRAM
+        </div>
+      </div>
+
+      <div class="module" style="min-width: 280px;">
+        <div class="module-name">Probe Bundle</div>
+        <div class="module-file">backend/models/*.pkl &nbsp;(~2.1 MB)</div>
+        <div class="module-desc">
+          4 LogisticRegression probes<br>
+          4 StandardScaler preprocessors<br>
+          4 layer range tuples<br>
+          <em>Loaded at startup, swapped with model</em>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Offline connector: Training Pipeline → ML Layer ── -->
+  <div class="offline-connector">
+    <div class="offline-line"></div>
+    <div class="offline-arrow-up"></div>
+    <div class="offline-label">Trained offline &mdash; probe bundle loaded at runtime</div>
+    <div class="offline-arrow-up"></div>
+    <div class="offline-line"></div>
+  </div>
+
+  <!-- ══ TRAINING PIPELINE ══ -->
+  <div class="tier tier-training">
+    <div class="tier-label">Training Pipeline <span class="tier-sublabel">Offline (Jupyter Notebooks)</span></div>
+    <div class="modules">
+
+      <div class="module" style="min-width: 175px;">
+        <div class="module-name">Preflight</div>
+        <div class="module-file">00_preflight.ipynb</div>
+        <div class="module-desc">Formula verification,<br>orientation checks</div>
+      </div>
+
+      <div class="module" style="min-width: 175px;">
+        <div class="module-name">Dataset Generation</div>
+        <div class="module-file">01_generate_dataset.ipynb</div>
+        <div class="module-desc">1000 TriviaQA questions<br>&rarr; 500 records<br>&rarr; ~541 MB .pkl</div>
+      </div>
+
+      <div class="module" style="min-width: 175px;">
+        <div class="module-name">Probe Training</div>
+        <div class="module-file">02_train_se_probes.ipynb</div>
+        <div class="module-desc">Layer sweep, binarisation,<br>LogisticRegression<br>&rarr; ~2.1 MB .pkl</div>
+      </div>
+
+      <div class="module" style="min-width: 175px;">
+        <div class="module-name">Sentence Baseline</div>
+        <div class="module-file">04_sentence_baseline.ipynb</div>
+        <div class="module-desc">B1 sigmoid calibration,<br>margin boost validation</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Caption ── -->
+  <div class="caption">
+    <strong>Figure 7.4</strong> — System architecture. The system is organised into four tiers:
+    the <em>Frontend</em> (vanilla JavaScript SPA with three scoring mode options),
+    the <em>Backend</em> (FastAPI server encapsulating the SemanticEngine, API routing layer, and ClaimFilter),
+    the <em>ML Layer</em> (GPU-resident transformer and serialised probe bundle),
+    and the offline <em>Training Pipeline</em> (Jupyter notebooks producing the probe bundles loaded at runtime).
+    Solid arrows indicate live request/response flow; dashed arrows indicate offline artefact loading.
+  </div>
+
+</div>
+</body>
+</html>

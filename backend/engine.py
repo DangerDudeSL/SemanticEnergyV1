@@ -548,12 +548,14 @@ class SemanticEngine:
         X_h = probe_bundle["slt_entropy_scaler"].transform(X_slt_h)
         entropy_risk = probe_bundle["slt_entropy_probe"].predict_proba(X_h)[0, 1]
 
-        # Per-sentence dual-probe scoring using isolated forward passes.
-        # Each claim sentence gets its own forward pass on (prompt + sentence_only),
-        # so the hidden state matches the SLT probe training distribution (short answers).
-        # AUROC-weighted combination: entropy (0.773) gets 51.5%, energy (0.727) gets 48.5%
-        W_ENTROPY = 0.515
-        W_ENERGY = 0.485
+        # Per-sentence scoring using isolated forward passes + logit confidence.
+        # Three signals blended directly (weights sum to 1.0):
+        #   - Energy probe:  best AUROC (0.704 avg), captures internal energy state
+        #   - Entropy probe: slightly weaker (0.683 avg), captures uncertainty
+        #   - Logit risk:    natively per-token, most reliable sentence-level signal
+        W_ENERGY  = 0.30
+        W_ENTROPY = 0.30
+        W_LOGIT   = 0.40
 
         if sentence_scores:
             sentences = [s["text"] for s in sentence_scores]
@@ -603,23 +605,23 @@ class SemanticEngine:
                 sentence_scores[si]["energy_risk"] = round(sent_energy_risk, 4) if sent_energy_risk is not None else None
                 sentence_scores[si]["entropy_risk"] = round(sent_entropy_risk, 4) if sent_entropy_risk is not None else None
 
-                # Combined risk: probe (0.9) + logit confidence as risk (0.1)
-                if sent_energy_risk is not None and sent_entropy_risk is not None:
-                    probe_only = W_ENTROPY * sent_entropy_risk + W_ENERGY * sent_energy_risk
-                elif sent_entropy_risk is not None:
-                    probe_only = sent_entropy_risk
-                elif sent_energy_risk is not None:
-                    probe_only = sent_energy_risk
-                else:
-                    probe_only = None
-
-                # Blend in logit confidence (inverted to risk) with 10% weight
+                # Combined risk: direct 3-way weighted blend
                 logit_conf = sentence_scores[si].get("confidence")
-                if probe_only is not None and logit_conf is not None:
-                    logit_risk = 1.0 - logit_conf
-                    probe_risk = 0.9 * probe_only + 0.1 * logit_risk
-                elif probe_only is not None:
-                    probe_risk = probe_only
+                logit_risk = (1.0 - logit_conf) if logit_conf is not None else None
+
+                # Collect available signals and their weights
+                signals, weights = [], []
+                if sent_energy_risk is not None:
+                    signals.append(sent_energy_risk); weights.append(W_ENERGY)
+                if sent_entropy_risk is not None:
+                    signals.append(sent_entropy_risk); weights.append(W_ENTROPY)
+                if logit_risk is not None:
+                    signals.append(logit_risk); weights.append(W_LOGIT)
+
+                if signals:
+                    # Normalize weights so they sum to 1.0 even if a signal is missing
+                    w_total = sum(weights)
+                    probe_risk = sum(s * w / w_total for s, w in zip(signals, weights))
                 else:
                     probe_risk = None
 

@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Figure — /score_fast_slt Call Sequence</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: #f4f6f9;
+    display: flex;
+    justify-content: center;
+    padding: 32px 20px 48px;
+  }
+
+  .diagram {
+    width: 760px;
+  }
+
+  /* ── typography helpers ── */
+  .mono { font-family: 'Consolas', 'Courier New', monospace; }
+  .label-small { font-size: 11px; color: #666; letter-spacing: 0.3px; }
+
+  /* ── connector arrow between blocks ── */
+  .arrow {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 28px;
+  }
+  .arrow::after {
+    content: '';
+    display: block;
+    width: 0;
+    height: 0;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-top: 12px solid #8899aa;
+  }
+  .arrow-line {
+    width: 2px;
+    height: 16px;
+    background: #8899aa;
+    margin: 0 auto;
+  }
+
+  /* ── entry point ── */
+  .entry {
+    background: #1b3a6b;
+    color: #fff;
+    border-radius: 8px;
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .entry .badge {
+    background: #3a7bd5;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 4px;
+    letter-spacing: 0.5px;
+  }
+  .entry .title {
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .entry .sub {
+    font-size: 11px;
+    color: #a8c0e8;
+    margin-top: 2px;
+  }
+
+  /* ── readiness check ── */
+  .readiness {
+    background: #fff;
+    border: 2px solid #27ae60;
+    border-radius: 8px;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .readiness .check-icon {
+    width: 26px; height: 26px;
+    background: #27ae60;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .readiness .check-text { font-size: 13px; color: #2c3e50; }
+  .readiness .check-text span { font-family: 'Consolas','Courier New',monospace; background: #eaf5ea; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+
+  /* ── engine wrapper ── */
+  .engine-wrapper {
+    border: 2px solid #1a6b4a;
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .engine-header {
+    background: #1a6b4a;
+    color: #fff;
+    padding: 10px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .engine-header .mono { font-size: 13px; color: #a8dfc4; }
+  .engine-body {
+    background: #f0faf5;
+    padding: 16px 16px 8px;
+  }
+
+  /* ── individual step ── */
+  .step {
+    background: #fff;
+    border-radius: 8px;
+    border: 1.5px solid #dce3eb;
+    overflow: hidden;
+    margin-bottom: 4px;
+  }
+
+  .step-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+  }
+
+  .step-num {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: #fff;
+    flex-shrink: 0;
+  }
+  /* colour per step group */
+  .s1 .step-num { background: #2980b9; }
+  .s2 .step-num { background: #2980b9; }
+  .s3 .step-num { background: #2980b9; }
+  .s4 .step-num { background: #2980b9; }
+  .s5 .step-num { background: #7d3c98; }
+  .s6 .step-num { background: #7d3c98; }
+  .s7 .step-num { background: #d35400; }
+
+  .step-title {
+    flex: 1;
+  }
+  .step-title .method {
+    font-family: 'Consolas','Courier New',monospace;
+    font-size: 13px;
+    font-weight: 600;
+    color: #1a2a3a;
+  }
+  .step-title .desc {
+    font-size: 11px;
+    color: #555;
+    margin-top: 2px;
+  }
+
+  .step-output {
+    padding: 0 14px 10px 50px;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .out-tag {
+    background: #ebf5fb;
+    border: 1px solid #aed6f1;
+    color: #1a5276;
+    font-family: 'Consolas','Courier New',monospace;
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 4px;
+  }
+
+  /* ── sub-steps inside a step ── */
+  .sub-steps {
+    margin: 0 14px 10px 50px;
+    background: #f7f9fb;
+    border-radius: 6px;
+    border: 1px solid #e0e8f0;
+    overflow: hidden;
+  }
+  .sub-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 7px 12px;
+    border-bottom: 1px solid #e8edf2;
+    font-size: 12px;
+    color: #2c3e50;
+  }
+  .sub-step:last-child { border-bottom: none; }
+  .sub-step .sub-icon {
+    color: #7f8c8d;
+    font-size: 11px;
+    padding-top: 1px;
+    flex-shrink: 0;
+  }
+  .sub-step .sub-method {
+    font-family: 'Consolas','Courier New',monospace;
+    font-size: 12px;
+    color: #1a5276;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .sub-step .sub-arrow {
+    color: #95a5a6;
+    font-size: 11px;
+    padding: 0 2px;
+    flex-shrink: 0;
+  }
+  .sub-step .sub-out {
+    color: #555;
+    font-size: 11px;
+  }
+  .sub-step .sub-out .mono { font-size: 11px; color: #6c3483; }
+  .sub-step .sub-out .shape {
+    background: #fdf2f8;
+    border: 1px solid #d7bde2;
+    color: #6c3483;
+    font-family: 'Consolas','Courier New',monospace;
+    font-size: 10px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    margin-left: 4px;
+  }
+
+  /* ── formula line inside step ── */
+  .formula-line {
+    margin: 0 14px 10px 50px;
+    background: #fef9f0;
+    border-left: 3px solid #f39c12;
+    padding: 7px 12px;
+    border-radius: 0 6px 6px 0;
+    font-size: 12px;
+    color: #2c3e50;
+  }
+  .formula-line .eq {
+    font-family: 'Consolas','Courier New',monospace;
+    font-size: 12px;
+    display: block;
+    line-height: 1.8;
+  }
+
+  /* ── final output block ── */
+  .json-output {
+    background: #1b3a6b;
+    border-radius: 8px;
+    padding: 14px 20px;
+    color: #fff;
+  }
+  .json-output .json-title {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: #a8c0e8;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+  }
+  .json-output .json-fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .json-field {
+    background: #2a4f8a;
+    border: 1px solid #3a6fba;
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-family: 'Consolas','Courier New',monospace;
+    font-size: 11px;
+    color: #cde;
+  }
+
+  /* caption */
+  .caption {
+    text-align: center;
+    font-size: 12px;
+    color: #555;
+    margin-top: 20px;
+    font-style: italic;
+    border-top: 1px solid #dce3eb;
+    padding-top: 14px;
+  }
+</style>
+</head>
+<body>
+<div class="diagram">
+
+  <!-- ── Entry Point ── -->
+  <div class="entry">
+    <div>
+      <span class="badge">POST</span>
+    </div>
+    <div>
+      <div class="title mono">/score_fast_slt</div>
+      <div class="sub">app.py — FastAPI endpoint handler</div>
+    </div>
+  </div>
+
+  <!-- arrow -->
+  <div><div class="arrow-line"></div><div class="arrow"></div></div>
+
+  <!-- ── Readiness Check ── -->
+  <div class="readiness">
+    <div class="check-icon">✓</div>
+    <div class="check-text">
+      Readiness check &nbsp;—&nbsp;
+      <span>engine is not None</span> &nbsp;&amp;&amp;&nbsp;
+      <span>probe_bundle</span> loaded
+    </div>
+  </div>
+
+  <!-- arrow -->
+  <div><div class="arrow-line"></div><div class="arrow"></div></div>
+
+  <!-- ── Engine Wrapper ── -->
+  <div class="engine-wrapper">
+    <div class="engine-header">
+      <span>engine.</span><span class="mono">score_with_slt_probe</span>
+      <span style="color:#a8dfc4;font-size:12px;font-weight:400;">(prompt, max_new_tokens=512)</span>
+    </div>
+    <div class="engine-body">
+
+      <!-- Step 1 -->
+      <div class="step s1">
+        <div class="step-header">
+          <div class="step-num">1</div>
+          <div class="step-title">
+            <div class="method">generate_responses(n=1, temperature=0.7)</div>
+            <div class="desc">Single stochastic generation — records per-token logits and softmax probabilities</div>
+          </div>
+        </div>
+        <div class="step-output">
+          <span class="out-tag">answer_text</span>
+          <span class="out-tag">logits_per_token</span>
+          <span class="out-tag">probs_per_token</span>
+        </div>
+      </div>
+
+      <!-- arrow -->
+      <div><div class="arrow-line" style="background:#aac;"></div><div class="arrow"></div></div>
+
+      <!-- Step 2 -->
+      <div class="step s2">
+        <div class="step-header">
+          <div class="step-num">2</div>
+          <div class="step-title">
+            <div class="method">score_sentences(answer_text, logits_per_token)</div>
+            <div class="desc">Segment answer, classify claims, compute B1 logit confidence per sentence</div>
+          </div>
+        </div>
+        <div class="sub-steps">
+          <div class="sub-step">
+            <span class="sub-icon">▸</span>
+            <span class="sub-method">pysbd.Segmenter.segment()</span>
+            <span class="sub-arrow">→</span>
+            <span class="sub-out">sentence boundary spans</span>
+          </div>
+          <div class="sub-step">
+            <span class="sub-icon">▸</span>
+            <span class="sub-method">ClaimFilter.is_claim()</span>
+            <span class="sub-arrow">→</span>
+            <span class="sub-out">boolean per sentence &nbsp;<span style="color:#888;font-size:10px;">(filler / heading / opinion → excluded)</span></span>
+          </div>
+          <div class="sub-step">
+            <span class="sub-icon">▸</span>
+            <span class="sub-method">B1 sigmoid(mean_logit, margin)</span>
+            <span class="sub-arrow">→</span>
+            <span class="sub-out">confidence score per <em>claim</em> sentence</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- arrow -->
+      <div><div class="arrow-line" style="background:#aac;"></div><div class="arrow"></div></div>
+
+      <!-- Step 3 -->
+      <div class="step s3">
+        <div class="step-header">
+          <div class="step-num">3</div>
+          <div class="step-title">
+            <div class="method">_align_tokens_to_sentences(tokens, sentence_spans)</div>
+            <div class="desc">Assign each token to its parent sentence via character-midpoint overlap</div>
+          </div>
+        </div>
+        <div class="step-output">
+          <span class="out-tag">token → sentence index mapping</span>
+        </div>
+      </div>
+
+      <!-- arrow -->
+      <div><div class="arrow-line" style="background:#aac;"></div><div class="arrow"></div></div>
+
+      <!-- Step 4 -->
+      <div class="step s4">
+        <div class="step-header">
+          <div class="step-num">4</div>
+          <div class="step-title">
+            <div class="method">_extract_hidden_states(prompt_ids, answer_ids)</div>
+            <div class="desc">Separate forward pass — extract TBG and SLT hidden states + sentence-end positions</div>
+          </div>
+        </div>
+        <div class="sub-steps">
+          <div class="sub-step">
+            <span class="sub-icon">▸</span>
+            <span class="sub-method">model(**full_inputs, output_hidden_states=True)</span>
+          </div>
+          <div class="sub-step">
+            <span class="sub-icon">▸</span>
+            <span class="sub-out"><span class="mono">tbg_hidden</span> = hidden[:, prompt_len−1, :] <span class="shape">(33, 4096)</span> — last prompt token</span>
+          </div>
+          <div class="sub-step">
+            <span class="sub-icon">▸</span>
+            <span class="sub-out"><span class="mono">slt_hidden</span> = hidden[:, full_len−2, :] <span class="shape">(33, 4096)</span> — token before EOS</span>
+          </div>
+          <div class="sub-step">
+            <span class="sub-icon">▸</span>
+            <span class="sub-out"><span class="mono">sentence_end_positions</span> — last-token index per sentence</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- arrow -->
+      <div><div class="arrow-line" style="background:#aac;"></div><div class="arrow"></div></div>
+
+      <!-- Step 5 -->
+      <div class="step s5">
+        <div class="step-header">
+          <div class="step-num">5</div>
+          <div class="step-title">
+            <div class="method">SLT Probe Inference &nbsp;<span style="font-size:11px;font-weight:400;color:#888;">(overall answer)</span></div>
+            <div class="desc">Slice selected layer window, apply StandardScaler, run both SLT probes</div>
+          </div>
+        </div>
+        <div class="formula-line">
+          <span class="eq">energy_risk &nbsp; = 1 − slt_energy_probe.predict_proba(X_e)[0, 1]</span>
+          <span class="eq">entropy_risk = slt_entropy_probe.predict_proba(X_h)[0, 1]</span>
+        </div>
+      </div>
+
+      <!-- arrow -->
+      <div><div class="arrow-line" style="background:#aac;"></div><div class="arrow"></div></div>
+
+      <!-- Step 6 -->
+      <div class="step s6">
+        <div class="step-header">
+          <div class="step-num">6</div>
+          <div class="step-title">
+            <div class="method">Per-sentence Probe Scoring &nbsp;<span style="font-size:11px;font-weight:400;color:#888;">(for each claim sentence s)</span></div>
+            <div class="desc">Extract hidden state at sentence-end token, run AUROC-weighted combination, escalate confidence level</div>
+          </div>
+        </div>
+        <div class="formula-line">
+          <span class="eq">probe_risk(s) = 0.515 × entropy_risk + 0.485 × energy_risk</span>
+          <span class="eq">level(s) &nbsp;&nbsp;&nbsp;&nbsp; = max(B1_level,  probe_risk_level) &nbsp;&nbsp; ← risk can only escalate</span>
+        </div>
+      </div>
+
+      <!-- arrow -->
+      <div><div class="arrow-line" style="background:#aac;"></div><div class="arrow"></div></div>
+
+      <!-- Step 7 -->
+      <div class="step s7">
+        <div class="step-header">
+          <div class="step-num">7</div>
+          <div class="step-title">
+            <div class="method">Conditional Aggregation</div>
+            <div class="desc">Apply Formula 7 (≤ 100 tokens) or Formula 8 (&gt; 100 tokens) to produce a single risk score</div>
+          </div>
+        </div>
+        <div class="sub-steps">
+          <div class="sub-step">
+            <span class="sub-icon">▸</span>
+            <span class="sub-out"><strong>Short (≤100 tok):</strong> 50% SLT avg + 50% mean sentence risk &nbsp;<em>(if ≥2 claims)</em></span>
+          </div>
+          <div class="sub-step">
+            <span class="sub-icon">▸</span>
+            <span class="sub-out"><strong>Long (&gt;100 tok):</strong> 0.15 × H_risk + w<sub>max</sub> × max R<sub>sent</sub> + (0.85 − w<sub>max</sub>) × mean R<sub>sent</sub></span>
+          </div>
+        </div>
+        <div class="step-output" style="padding-top:6px;">
+          <span class="out-tag">combined_risk</span>
+          <span class="out-tag">confidence_level</span>
+        </div>
+      </div>
+
+    </div><!-- engine-body -->
+  </div><!-- engine-wrapper -->
+
+  <!-- arrow -->
+  <div><div class="arrow-line"></div><div class="arrow"></div></div>
+
+  <!-- ── JSON Output ── -->
+  <div class="json-output">
+    <div class="json-title">JSON Response</div>
+    <div class="json-fields">
+      <span class="json-field">answer</span>
+      <span class="json-field">confidence_level</span>
+      <span class="json-field">combined_risk</span>
+      <span class="json-field">sentence_scores [ ]</span>
+      <span class="json-field">energy_risk</span>
+      <span class="json-field">entropy_risk</span>
+      <span class="json-field">response_time</span>
+    </div>
+  </div>
+
+  <!-- caption -->
+  <div class="caption">
+    Figure 7.6 — Method-level call sequence for the <code>/score_fast_slt</code> endpoint.
+    Steps 1–4 handle data flow (generation, segmentation, alignment, hidden state extraction);
+    Steps 5–6 perform probe inference; Step 7 aggregates sentence scores into a single risk value.
+  </div>
+
+</div>
+</body>
+</html>

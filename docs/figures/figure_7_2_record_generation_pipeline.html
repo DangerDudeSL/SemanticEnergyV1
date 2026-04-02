@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Figure 7.2 — Per-Question Record Generation Pipeline</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Times New Roman', Georgia, serif;
+    background: #fff;
+    display: flex;
+    justify-content: center;
+    padding: 30px 20px;
+  }
+  .diagram { width: 860px; }
+  .caption {
+    text-align: center;
+    font-size: 11px;
+    color: #333;
+    margin-top: 20px;
+    font-style: italic;
+    line-height: 1.5;
+    max-width: 800px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .pipeline {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+
+  .step {
+    display: flex;
+    align-items: stretch;
+    width: 100%;
+    gap: 0;
+  }
+
+  .step-number {
+    width: 50px;
+    min-height: 70px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 16px;
+    color: #fff;
+    border-radius: 6px 0 0 6px;
+    flex-shrink: 0;
+  }
+
+  .step-content {
+    flex: 1;
+    border: 2px solid #ddd;
+    border-left: none;
+    border-radius: 0 6px 6px 0;
+    padding: 12px 18px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    min-height: 70px;
+  }
+
+  .step-main {
+    flex: 1;
+  }
+
+  .step-title {
+    font-weight: bold;
+    font-size: 13px;
+    margin-bottom: 3px;
+  }
+
+  .step-desc {
+    font-size: 11px;
+    color: #555;
+    line-height: 1.4;
+  }
+
+  .step-output {
+    text-align: right;
+    flex-shrink: 0;
+    margin-left: 20px;
+  }
+
+  .output-tag {
+    display: inline-block;
+    background: #f5f5f5;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 3px 8px;
+    font-size: 10px;
+    font-family: 'Consolas', 'Courier New', monospace;
+    margin: 2px 0;
+    color: #333;
+  }
+
+  .model-tag {
+    display: inline-block;
+    background: #fff3e0;
+    border: 1px solid #e67e22;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 9px;
+    color: #e67e22;
+    font-weight: bold;
+    margin-left: 8px;
+  }
+
+  .arrow-down {
+    display: flex;
+    justify-content: center;
+    padding: 4px 0;
+  }
+  .arrow-down svg {
+    width: 20px;
+    height: 18px;
+  }
+
+  /* Color coding for step numbers */
+  .step-gen { background: #4a7ab5; }
+  .step-cluster { background: #e67e22; }
+  .step-energy { background: #27ae60; }
+  .step-entropy { background: #7e57c2; }
+  .step-correct { background: #3498db; }
+  .step-hidden { background: #c0392b; }
+  .step-logit { background: #8e44ad; }
+
+  .step-content.bg-gen { border-color: #a8c5e2; background: #f4f8fc; }
+  .step-content.bg-cluster { border-color: #f0c78e; background: #fef9f0; }
+  .step-content.bg-energy { border-color: #a8d5b8; background: #f0faf3; }
+  .step-content.bg-entropy { border-color: #c5b3e0; background: #f8f4fd; }
+  .step-content.bg-correct { border-color: #a8cce2; background: #f0f7fc; }
+  .step-content.bg-hidden { border-color: #e0a8a8; background: #fdf2f2; }
+  .step-content.bg-logit { border-color: #c9a8d5; background: #f9f2fd; }
+
+  .final-box {
+    border: 2.5px solid #333;
+    border-radius: 8px;
+    padding: 14px 24px;
+    text-align: center;
+    background: #fafafa;
+    margin-top: 8px;
+    width: 100%;
+  }
+  .final-box .step-title { font-size: 14px; }
+  .final-box .step-desc { font-size: 11px; }
+</style>
+</head>
+<body>
+<div class="diagram">
+  <div class="pipeline">
+
+    <!-- Step 1 -->
+    <div class="step">
+      <div class="step-number step-gen">1</div>
+      <div class="step-content bg-gen">
+        <div class="step-main">
+          <div class="step-title">Multi-Sample Generation <span class="model-tag">5 x LLM Forward Pass</span></div>
+          <div class="step-desc">Generate 5 independent responses (temp = 0.7, max 512 tokens). Record per-token logits and softmax probabilities for each sample.</div>
+        </div>
+        <div class="step-output">
+          <div class="output-tag">answer[0..4]</div>
+          <div class="output-tag">logits[0..4]</div>
+          <div class="output-tag">probs[0..4]</div>
+          <div class="output-tag">token_ids[0..4]</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow-down"><svg viewBox="0 0 20 18"><polygon points="10,18 2,4 18,4" fill="#888"/></svg></div>
+
+    <!-- Step 2 -->
+    <div class="step">
+      <div class="step-number step-cluster">2</div>
+      <div class="step-content bg-cluster">
+        <div class="step-main">
+          <div class="step-title">Semantic Clustering <span class="model-tag">Up to 10 x LLM Forward Pass</span></div>
+          <div class="step-desc">Pairwise LLM equivalence checking with greedy agglomerative clustering. Groups answers by meaning, not exact wording.</div>
+        </div>
+        <div class="step-output">
+          <div class="output-tag">clusters</div>
+          <div class="output-tag">num_clusters</div>
+          <div class="output-tag">cluster_sizes</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow-down"><svg viewBox="0 0 20 18"><polygon points="10,18 2,4 18,4" fill="#888"/></svg></div>
+
+    <!-- Step 3 -->
+    <div class="step">
+      <div class="step-number step-energy">3</div>
+      <div class="step-content bg-energy">
+        <div class="step-main">
+          <div class="step-title">Energy Teacher Computation <span class="model-tag">Arithmetic Only</span></div>
+          <div class="step-desc">Boltzmann energy per sample: E<sub>i</sub> = -mean(logits). Aggregate by cluster, normalise to [0, 1]. Main cluster share = confidence.</div>
+        </div>
+        <div class="step-output">
+          <div class="output-tag">energy_score_raw</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow-down"><svg viewBox="0 0 20 18"><polygon points="10,18 2,4 18,4" fill="#888"/></svg></div>
+
+    <!-- Step 4 -->
+    <div class="step">
+      <div class="step-number step-entropy">4</div>
+      <div class="step-content bg-entropy">
+        <div class="step-main">
+          <div class="step-title">Entropy Teacher Computation <span class="model-tag">Arithmetic Only</span></div>
+          <div class="step-desc">Shannon entropy over cluster size distribution: H = -&Sigma;(|c|/N) &middot; ln(|c|/N). Uses cluster structure only, ignores logits.</div>
+        </div>
+        <div class="step-output">
+          <div class="output-tag">entropy_score_raw</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow-down"><svg viewBox="0 0 20 18"><polygon points="10,18 2,4 18,4" fill="#888"/></svg></div>
+
+    <!-- Step 5 -->
+    <div class="step">
+      <div class="step-number step-correct">5</div>
+      <div class="step-content bg-correct">
+        <div class="step-main">
+          <div class="step-title">Correctness Evaluation <span class="model-tag">No Model Call</span></div>
+          <div class="step-desc">Normalised substring match of main answer against TriviaQA reference aliases. Used for evaluation only, NOT for training.</div>
+        </div>
+        <div class="step-output">
+          <div class="output-tag">correctness</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow-down"><svg viewBox="0 0 20 18"><polygon points="10,18 2,4 18,4" fill="#888"/></svg></div>
+
+    <!-- Step 6 -->
+    <div class="step">
+      <div class="step-number step-hidden">6</div>
+      <div class="step-content bg-hidden">
+        <div class="step-main">
+          <div class="step-title">Hidden State Extraction <span class="model-tag">1 x LLM Forward Pass</span></div>
+          <div class="step-desc">Separate forward pass on (prompt + answer) with output_hidden_states=True. Extract at TBG position (last prompt token) and SLT position (2nd-to-last generated token). Shape: (33 layers, 4096 dims) each.</div>
+        </div>
+        <div class="step-output">
+          <div class="output-tag">emb_last_tok_before_gen</div>
+          <div class="output-tag">emb_tok_before_eos</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow-down"><svg viewBox="0 0 20 18"><polygon points="10,18 2,4 18,4" fill="#888"/></svg></div>
+
+    <!-- Step 7 -->
+    <div class="step">
+      <div class="step-number step-logit">7</div>
+      <div class="step-content bg-logit">
+        <div class="step-main">
+          <div class="step-title">Logit Feature Extraction <span class="model-tag">No Model Call</span></div>
+          <div class="step-desc">9 scalar summary statistics from sample 0: mean/min/std of chosen-token logits, mean/min/std of top-1/top-2 margins, answer length, mean/min softmax probability.</div>
+        </div>
+        <div class="step-output">
+          <div class="output-tag">logit_feats (9 features)</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow-down"><svg viewBox="0 0 20 18"><polygon points="10,18 2,4 18,4" fill="#888"/></svg></div>
+
+    <!-- Final output -->
+    <div class="final-box">
+      <div class="step-title">Output: One Training Record</div>
+      <div class="step-desc" style="margin-top: 6px;">
+        Serialised as Python pickle &nbsp;|&nbsp; ~500 valid records from 1,000 questions &nbsp;|&nbsp; ~541 MB total dataset
+      </div>
+      <div style="margin-top: 8px;">
+        <span class="output-tag">uid</span>
+        <span class="output-tag">question</span>
+        <span class="output-tag">main_answer</span>
+        <span class="output-tag">energy_score_raw</span>
+        <span class="output-tag">entropy_score_raw</span>
+        <span class="output-tag">correctness</span>
+        <span class="output-tag">emb_last_tok_before_gen (33, 4096)</span>
+        <span class="output-tag">emb_tok_before_eos (33, 4096)</span>
+        <span class="output-tag">logit_feats</span>
+        <span class="output-tag">num_clusters</span>
+        <span class="output-tag">cluster_sizes</span>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="caption">
+    <strong>Figure 7.2</strong> — Per-question record generation pipeline. Each of the 1,000 TriviaQA questions passes through seven processing steps.
+    Coloured step numbers indicate the computation type: blue for generation, orange for clustering, green for energy, purple for entropy,
+    red for hidden state extraction. Orange tags on each step indicate whether an LLM forward pass is required.
+    The final record contains all fields needed for probe training and evaluation.
+  </div>
+</div>
+</body>
+</html>

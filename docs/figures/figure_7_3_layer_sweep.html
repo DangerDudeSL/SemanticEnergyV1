@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Figure 7.3 — Per-Layer AUROC Sweep</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Times New Roman', Georgia, serif;
+    background: #fff;
+    display: flex;
+    justify-content: center;
+    padding: 30px 20px;
+  }
+  .diagram { width: 920px; }
+  .caption {
+    text-align: center;
+    font-size: 11px;
+    color: #333;
+    margin-top: 14px;
+    font-style: italic;
+    line-height: 1.5;
+    max-width: 860px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .image-row {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    align-items: flex-start;
+  }
+  .image-panel {
+    flex: 1;
+    text-align: center;
+  }
+  .image-panel img {
+    width: 100%;
+    max-width: 440px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+  }
+  .image-label {
+    font-size: 11px;
+    font-weight: bold;
+    margin-bottom: 8px;
+    color: #333;
+  }
+  .peak-table {
+    margin: 16px auto 0;
+    border-collapse: collapse;
+    font-size: 11px;
+  }
+  .peak-table th, .peak-table td {
+    border: 1px solid #ccc;
+    padding: 5px 12px;
+    text-align: center;
+  }
+  .peak-table th {
+    background: #f5f5f5;
+    font-weight: bold;
+  }
+  .peak-table .highlight {
+    font-weight: bold;
+    color: #2e7d32;
+  }
+</style>
+</head>
+<body>
+<div class="diagram">
+
+  <!-- Llama plots -->
+  <div style="text-align: center; font-weight: bold; font-size: 13px; margin-bottom: 10px;">
+    Llama 3.1 8B Instruct — Per-Layer Validation AUROC
+  </div>
+  <div class="image-row">
+    <div class="image-panel">
+      <div class="image-label">(a) Energy Probes</div>
+      <img src="../../notebooks/figures/energy_probe_layer_sweep.png" alt="Energy probe layer sweep — Llama 3.1 8B">
+    </div>
+    <div class="image-panel">
+      <div class="image-label">(b) Entropy Probes</div>
+      <img src="../../notebooks/figures/entropy_probe_layer_sweep.png" alt="Entropy probe layer sweep — Llama 3.1 8B">
+    </div>
+  </div>
+
+  <!-- Qwen plots -->
+  <div style="text-align: center; font-weight: bold; font-size: 13px; margin: 24px 0 10px;">
+    Qwen3 8B — Per-Layer Validation AUROC
+  </div>
+  <div class="image-row">
+    <div class="image-panel">
+      <div class="image-label">(c) Energy Probes</div>
+      <img src="../../notebooks/figures/energy_layer_sweep_qwen3-8b.png" alt="Energy probe layer sweep — Qwen3 8B">
+    </div>
+    <div class="image-panel">
+      <div class="image-label">(d) Entropy Probes</div>
+      <img src="../../notebooks/figures/entropy_layer_sweep_qwen3-8b.png" alt="Entropy probe layer sweep — Qwen3 8B">
+    </div>
+  </div>
+
+  <!-- Summary table -->
+  <table class="peak-table">
+    <tr>
+      <th>Probe</th>
+      <th colspan="2">Llama 3.1 8B</th>
+      <th colspan="2">Qwen3 8B</th>
+    </tr>
+    <tr>
+      <th></th>
+      <th>Best Layer</th>
+      <th>Val AUROC</th>
+      <th>Best Layer</th>
+      <th>Val AUROC</th>
+    </tr>
+    <tr>
+      <td>TBG Energy</td>
+      <td>14</td>
+      <td class="highlight">0.8706</td>
+      <td>8</td>
+      <td>0.6981</td>
+    </tr>
+    <tr>
+      <td>SLT Energy</td>
+      <td>19</td>
+      <td>0.7412</td>
+      <td>25</td>
+      <td>0.8201</td>
+    </tr>
+    <tr>
+      <td>TBG Entropy</td>
+      <td>24</td>
+      <td>0.8693</td>
+      <td>12</td>
+      <td>0.7271</td>
+    </tr>
+    <tr>
+      <td>SLT Entropy</td>
+      <td>20</td>
+      <td>0.7929</td>
+      <td>25</td>
+      <td>0.7875</td>
+    </tr>
+  </table>
+
+  <div class="caption">
+    <strong>Figure 7.3</strong> — Per-layer AUROC sweep for all four probes across two models. Each point represents a logistic regression trained
+    on a single transformer layer's hidden state (4,096 features). Panels (a) and (b) show Llama 3.1 8B results; panels (c) and (d) show Qwen3 8B.
+    TBG Energy achieves the highest single-layer AUROC on Llama (0.8706 at layer 14), while optimal layers shift across models, demonstrating
+    that the predictive signal's location is model-dependent. The table summarises peak layers and AUROC values for both models.
+  </div>
+
+</div>
+</body>
+</html>
