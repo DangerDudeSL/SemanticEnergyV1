@@ -400,41 +400,6 @@ class SemanticEngine:
 
         return tbg_hidden, slt_hidden, extra_hiddens
 
-    def _extract_isolated_sentence_hidden(self, question, sentence_text):
-        """
-        Run a forward pass on (prompt + single_sentence) to extract the hidden
-        state at the last meaningful token. This matches the SLT probe training
-        distribution where probes were trained on short (1-2 sentence) answers
-        with hidden states at the last-token-before-EOS.
-
-        Returns np.ndarray of shape (num_layers, hidden_dim) or None if
-        the sentence is too short (< 2 answer tokens).
-        """
-        messages = [{"role": "user", "content": question}]
-        prompt_only = self._safe_apply_chat_template(
-            self.tokenizer, messages, tokenize=False, add_generation_prompt=True)
-
-        prompt_ids = self.tokenizer(prompt_only, return_tensors="pt").input_ids
-        prompt_len = prompt_ids.shape[1]
-
-        full_text = prompt_only + sentence_text
-        full_inputs = self.tokenizer(full_text, return_tensors="pt").to("cuda:0")
-        full_len = full_inputs.input_ids.shape[1]
-
-        if full_len <= prompt_len + 1:
-            return None
-
-        with torch.no_grad():
-            outputs = self.model(**full_inputs, output_hidden_states=True)
-
-        hidden = torch.stack(outputs.hidden_states, dim=0)[:, 0, :, :].float().cpu()
-        slt_hidden = hidden[:, full_len - 2, :].numpy()
-
-        del outputs, hidden
-        torch.cuda.empty_cache()
-
-        return slt_hidden
-
     def score_with_tbg_probe(self, question, probe_bundle):
         """
         TBG mode: pre-generation risk estimation.
@@ -516,9 +481,27 @@ class SemanticEngine:
             gen_data[0]["logits"], gen_data[0].get("top2_logits"),
         )
 
-        # Extract hidden states for overall SLT + TBG scores (full-answer forward pass)
-        tbg_hidden, slt_hidden, _ = self._extract_hidden_states(
+        # Find the last token position of each sentence (for per-sentence probe scoring)
+        sent_end_positions = []
+        if sentence_scores:
+            sentences = [s["text"] for s in sentence_scores]
+            token_sentence_idx = self.align_tokens_to_sentences(answer_text, token_ids, sentences)
+            # For each sentence, find the last token that belongs to it
+            for si in range(len(sentences)):
+                last_pos = -1
+                for tok_pos, sent_idx in enumerate(token_sentence_idx):
+                    if sent_idx == si:
+                        last_pos = tok_pos
+                sent_end_positions.append(last_pos if last_pos >= 0 else None)
+
+        # Extract hidden states: SLT, TBG, plus per-sentence-end positions (claims only)
+        valid_positions = [
+            p for si, p in enumerate(sent_end_positions)
+            if p is not None and sentence_scores[si].get("is_claim", True)
+        ]
+        tbg_hidden, slt_hidden, sent_hiddens = self._extract_hidden_states(
             question, answer_text,
+            extra_positions=valid_positions if valid_positions else None,
         )
 
         if slt_hidden is None:
@@ -548,37 +531,28 @@ class SemanticEngine:
         X_h = probe_bundle["slt_entropy_scaler"].transform(X_slt_h)
         entropy_risk = probe_bundle["slt_entropy_probe"].predict_proba(X_h)[0, 1]
 
-        # Per-sentence scoring using isolated forward passes + logit confidence.
-        # Three signals blended directly (weights sum to 1.0):
-        #   - Energy probe:  best AUROC (0.704 avg), captures internal energy state
-        #   - Entropy probe: slightly weaker (0.683 avg), captures uncertainty
-        #   - Logit risk:    natively per-token, most reliable sentence-level signal
-        W_ENERGY  = 0.30
-        W_ENTROPY = 0.30
-        W_LOGIT   = 0.40
+        # Per-sentence dual-probe scoring (energy + entropy) on sentence-end hidden states
+        # Only run on claim sentences (non-claims were excluded from valid_positions)
+        # AUROC-weighted combination: entropy (0.773) gets 51.5%, energy (0.727) gets 48.5%
+        W_ENTROPY = 0.515
+        W_ENERGY = 0.485
 
-        if sentence_scores:
-            sentences = [s["text"] for s in sentence_scores]
-            n_sentences = len(sentences)
-            is_single_sentence = (n_sentences == 1)
-            claim_count = sum(1 for s in sentence_scores if s.get("is_claim", True))
-            print(f"[SLT] Running {claim_count} isolated forward pass(es) for claim sentences "
-                  f"({n_sentences} total sentences)", flush=True)
-
-            for si in range(n_sentences):
-                # Skip non-claim sentences
+        if sent_hiddens and sentence_scores:
+            valid_idx = 0
+            for si, pos in enumerate(sent_end_positions):
+                # Skip non-claim sentences entirely
                 if not sentence_scores[si].get("is_claim", True):
                     sentence_scores[si]["energy_risk"] = None
                     sentence_scores[si]["entropy_risk"] = None
                     sentence_scores[si]["probe_risk"] = None
                     continue
-
-                # For single-sentence answers, reuse overall slt_hidden (identical)
-                if is_single_sentence and slt_hidden is not None:
-                    h = slt_hidden
-                else:
-                    h = self._extract_isolated_sentence_hidden(question, sentences[si])
-
+                if pos is None or valid_idx >= len(sent_hiddens):
+                    sentence_scores[si]["energy_risk"] = None
+                    sentence_scores[si]["entropy_risk"] = None
+                    sentence_scores[si]["probe_risk"] = None
+                    continue
+                h = sent_hiddens[valid_idx]
+                valid_idx += 1
                 if h is None:
                     sentence_scores[si]["energy_risk"] = None
                     sentence_scores[si]["entropy_risk"] = None
@@ -605,111 +579,85 @@ class SemanticEngine:
                 sentence_scores[si]["energy_risk"] = round(sent_energy_risk, 4) if sent_energy_risk is not None else None
                 sentence_scores[si]["entropy_risk"] = round(sent_entropy_risk, 4) if sent_entropy_risk is not None else None
 
-                # Combined risk: direct 3-way weighted blend
-                logit_conf = sentence_scores[si].get("confidence")
-                logit_risk = (1.0 - logit_conf) if logit_conf is not None else None
-
-                # Collect available signals and their weights
-                signals, weights = [], []
-                if sent_energy_risk is not None:
-                    signals.append(sent_energy_risk); weights.append(W_ENERGY)
-                if sent_entropy_risk is not None:
-                    signals.append(sent_entropy_risk); weights.append(W_ENTROPY)
-                if logit_risk is not None:
-                    signals.append(logit_risk); weights.append(W_LOGIT)
-
-                if signals:
-                    # Normalize weights so they sum to 1.0 even if a signal is missing
-                    w_total = sum(weights)
-                    probe_risk = sum(s * w / w_total for s, w in zip(signals, weights))
+                # Combined risk: AUROC-weighted average
+                if sent_energy_risk is not None and sent_entropy_risk is not None:
+                    probe_risk = W_ENTROPY * sent_entropy_risk + W_ENERGY * sent_energy_risk
+                elif sent_entropy_risk is not None:
+                    probe_risk = sent_entropy_risk
+                elif sent_energy_risk is not None:
+                    probe_risk = sent_energy_risk
                 else:
                     probe_risk = None
 
                 sentence_scores[si]["probe_risk"] = round(probe_risk, 4) if probe_risk is not None else None
 
-                # Override level using combined probe risk (both directions)
+                # Override level using combined probe risk
                 if probe_risk is not None:
                     if probe_risk >= 0.65:
                         sentence_scores[si]["level"] = "low"
                     elif probe_risk >= 0.35:
                         sentence_scores[si]["level"] = "medium"
-                    else:
-                        sentence_scores[si]["level"] = "high"
+                    # If probe says low risk, keep existing logit-based level
 
-                print(f"  [SLT] S{si+1}/{n_sentences}: probe_risk={probe_risk}", flush=True)
-
-        # ── Aggregate scoring: sentence-count primary, length-adaptive SLT weight ──
+        # ── Aggregate scoring: token-length conditional ──────────────────────
+        TOKEN_THRESHOLD = 100  # matches probe training distribution (TriviaQA short answers)
         answer_token_count = len(token_ids)
-        slt_combined = (energy_risk + entropy_risk) / 2.0
 
-        per_sent_risks = [s["probe_risk"] for s in sentence_scores
-                          if s.get("probe_risk") is not None and s.get("is_claim", True)]
+        if answer_token_count <= TOKEN_THRESHOLD:
+            slt_combined = (energy_risk + entropy_risk) / 2.0
 
-        if len(per_sent_risks) >= 2:
-            n = len(per_sent_risks)
-            mean_sent_risk = sum(per_sent_risks) / n
-            max_sent_risk = max(per_sent_risks)
+            per_sent_risks = [s["probe_risk"] for s in sentence_scores
+                              if s.get("probe_risk") is not None and s.get("is_claim", True)]
 
-            # SLT overall weight decays with answer length.
-            # Lower ceiling/floor than before: per-sentence scores are now in-distribution
-            # (isolated forward passes), so they deserve more weight.
-            #   ~0.30 at 1 token, ~0.17 at 100, ~0.09 at 300, floor 0.05
-            slt_weight = max(0.05, 0.30 / (1.0 + math.log(1.0 + answer_token_count / 100.0)))
-
-            # Max-sentence weight flags worst-case hallucination, decays with claim count
-            max_weight = 0.35 / (1.0 + math.log(max(n, 1)))
-
-            remaining = 1.0 - slt_weight
-            mean_weight = max(0, remaining - max_weight)
-            if mean_weight == 0:
-                max_weight = remaining
-
-            combined_risk = (slt_weight * slt_combined
-                           + max_weight * max_sent_risk
-                           + mean_weight * mean_sent_risk)
-            print(f"[SLT] Blended ({answer_token_count} tok, {n} claims): "
-                  f"slt_w={slt_weight:.2f}, max_w={max_weight:.2f}, mean_w={mean_weight:.2f} "
-                  f"-> {combined_risk:.3f}", flush=True)
-
-        elif len(per_sent_risks) == 1:
-            slt_weight = max(0.05, 0.30 / (1.0 + math.log(1.0 + answer_token_count / 100.0)))
-            combined_risk = slt_weight * slt_combined + (1.0 - slt_weight) * per_sent_risks[0]
-            print(f"[SLT] Single claim ({answer_token_count} tok): "
-                  f"slt_w={slt_weight:.2f} -> {combined_risk:.3f}", flush=True)
-
+            if len(per_sent_risks) >= 2:
+                # 2+ claim sentences: SLT token only captures state at the end,
+                # so blend with per-sentence probes to represent all claims
+                mean_sent_risk = sum(per_sent_risks) / len(per_sent_risks)
+                combined_risk = 0.5 * slt_combined + 0.5 * mean_sent_risk
+                print(f"[SLT] Short answer ({answer_token_count} tok, {len(per_sent_risks)} claims): "
+                      f"blended (slt={slt_combined:.3f}, sent_mean={mean_sent_risk:.3f}) -> {combined_risk:.3f}", flush=True)
+            else:
+                # 0-1 claim sentences: SLT probe covers the whole answer adequately
+                combined_risk = slt_combined
+                print(f"[SLT] Short answer ({answer_token_count} tok, {len(per_sent_risks)} claims): "
+                      f"SLT-direct -> {combined_risk:.3f}", flush=True)
         else:
-            # No per-sentence probe data: SLT-only fallback
-            combined_risk = slt_combined
-            print(f"[SLT] No per-sentence data ({answer_token_count} tok): "
-                  f"SLT-direct -> {combined_risk:.3f}", flush=True)
+            # LONG ANSWER: SLT unreliable, rely heavily on per-sentence probe risks
+            per_sent_risks = [s["probe_risk"] for s in sentence_scores
+                              if s.get("probe_risk") is not None and s.get("is_claim", True)]
 
-        # Sentence-averaged confidence (claim sentences only, probe-adjusted)
-        valid_confs = []
-        for s in sentence_scores:
-            if not s.get("is_claim", True):
-                continue
-            if s.get("probe_risk") is not None:
-                valid_confs.append(1.0 - s["probe_risk"])
-            elif s.get("confidence") is not None:
-                valid_confs.append(s["confidence"])
+            if per_sent_risks:
+                n = len(per_sent_risks)
+                max_sent_risk = max(per_sent_risks)
+                mean_sent_risk = sum(per_sent_risks) / n
+
+                # Length-adaptive weights
+                slt_weight = 0.15
+                max_weight = 0.25 / (1.0 + math.log(max(n, 1)))
+                mean_weight = 1.0 - slt_weight - max_weight
+
+                combined_risk = (slt_weight * entropy_risk
+                               + max_weight * max_sent_risk
+                               + mean_weight * mean_sent_risk)
+                print(f"[SLT] Long answer ({answer_token_count} tokens > {TOKEN_THRESHOLD}): "
+                      f"blended aggregate (n={n} claims, weights: slt={slt_weight:.2f}, "
+                      f"max={max_weight:.2f}, mean={mean_weight:.2f})", flush=True)
+            else:
+                # Fallback if no per-sentence probe data available
+                combined_risk = (energy_risk + entropy_risk) / 2.0
+                print(f"[SLT] Long answer but no per-sentence probe data: using SLT-direct fallback", flush=True)
+
+        if combined_risk < 0.35:
+            level = "high"
+        elif combined_risk < 0.65:
+            level = "medium"
+        else:
+            level = "low"
+
+        # Sentence-averaged confidence (claim sentences only)
+        valid_confs = [s["confidence"] for s in sentence_scores
+                       if s["confidence"] is not None and s.get("is_claim", True)]
         sentence_avg_confidence = float(np.mean(valid_confs)) if valid_confs else None
-
-        # Confidence level driven by sentence-average confidence (primary metric)
-        if sentence_avg_confidence is not None:
-            if sentence_avg_confidence >= 0.65:
-                level = "high"
-            elif sentence_avg_confidence >= 0.35:
-                level = "medium"
-            else:
-                level = "low"
-        else:
-            # Fallback when no sentence data
-            if combined_risk < 0.35:
-                level = "high"
-            elif combined_risk < 0.65:
-                level = "medium"
-            else:
-                level = "low"
 
         return {
             "mode": "slt_post_generation",
