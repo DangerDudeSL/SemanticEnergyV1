@@ -222,7 +222,7 @@ class SemanticEngine:
         Returns empty list if answer has fewer than 2 sentences.
         """
         sentences = self.split_into_sentences(answer_text)
-        if len(sentences) < 2:
+        if not sentences:
             return []
 
         token_sentence_idx = self.align_tokens_to_sentences(answer_text, token_ids, sentences)
@@ -533,9 +533,9 @@ class SemanticEngine:
 
         # Per-sentence dual-probe scoring (energy + entropy) on sentence-end hidden states
         # Only run on claim sentences (non-claims were excluded from valid_positions)
-        # AUROC-weighted combination: entropy (0.773) gets 51.5%, energy (0.727) gets 48.5%
-        W_ENTROPY = 0.515
-        W_ENERGY = 0.485
+        # Energy probe weighted higher — more reliable in practice
+        W_ENERGY  = 0.70
+        W_ENTROPY = 0.30
 
         if sent_hiddens and sentence_scores:
             valid_idx = 0
@@ -591,21 +591,21 @@ class SemanticEngine:
 
                 sentence_scores[si]["probe_risk"] = round(probe_risk, 4) if probe_risk is not None else None
 
-                # Override level using combined probe risk
+                # Set level directly from combined probe risk (both directions)
                 if probe_risk is not None:
                     if probe_risk >= 0.65:
-                        sentence_scores[si]["level"] = "low"
+                        sentence_scores[si]["level"] = "low"      # RISK
                     elif probe_risk >= 0.35:
-                        sentence_scores[si]["level"] = "medium"
-                    # If probe says low risk, keep existing logit-based level
+                        sentence_scores[si]["level"] = "medium"   # WARN
+                    else:
+                        sentence_scores[si]["level"] = "high"     # OK
 
         # ── Aggregate scoring: token-length conditional ──────────────────────
         TOKEN_THRESHOLD = 100  # matches probe training distribution (TriviaQA short answers)
         answer_token_count = len(token_ids)
+        slt_combined = W_ENERGY * energy_risk + W_ENTROPY * entropy_risk
 
         if answer_token_count <= TOKEN_THRESHOLD:
-            slt_combined = (energy_risk + entropy_risk) / 2.0
-
             per_sent_risks = [s["probe_risk"] for s in sentence_scores
                               if s.get("probe_risk") is not None and s.get("is_claim", True)]
 
@@ -616,10 +616,15 @@ class SemanticEngine:
                 combined_risk = 0.5 * slt_combined + 0.5 * mean_sent_risk
                 print(f"[SLT] Short answer ({answer_token_count} tok, {len(per_sent_risks)} claims): "
                       f"blended (slt={slt_combined:.3f}, sent_mean={mean_sent_risk:.3f}) -> {combined_risk:.3f}", flush=True)
+            elif len(per_sent_risks) == 1:
+                # Single claim sentence: blend overall SLT with that sentence's probe risk
+                combined_risk = 0.5 * slt_combined + 0.5 * per_sent_risks[0]
+                print(f"[SLT] Short answer ({answer_token_count} tok, 1 claim): "
+                      f"blended (slt={slt_combined:.3f}, sent={per_sent_risks[0]:.3f}) -> {combined_risk:.3f}", flush=True)
             else:
-                # 0-1 claim sentences: SLT probe covers the whole answer adequately
+                # 0 claim sentences: SLT probe only
                 combined_risk = slt_combined
-                print(f"[SLT] Short answer ({answer_token_count} tok, {len(per_sent_risks)} claims): "
+                print(f"[SLT] Short answer ({answer_token_count} tok, 0 claims): "
                       f"SLT-direct -> {combined_risk:.3f}", flush=True)
         else:
             # LONG ANSWER: SLT unreliable, rely heavily on per-sentence probe risks
@@ -636,7 +641,7 @@ class SemanticEngine:
                 max_weight = 0.25 / (1.0 + math.log(max(n, 1)))
                 mean_weight = 1.0 - slt_weight - max_weight
 
-                combined_risk = (slt_weight * entropy_risk
+                combined_risk = (slt_weight * slt_combined
                                + max_weight * max_sent_risk
                                + mean_weight * mean_sent_risk)
                 print(f"[SLT] Long answer ({answer_token_count} tokens > {TOKEN_THRESHOLD}): "
@@ -644,7 +649,7 @@ class SemanticEngine:
                       f"max={max_weight:.2f}, mean={mean_weight:.2f})", flush=True)
             else:
                 # Fallback if no per-sentence probe data available
-                combined_risk = (energy_risk + entropy_risk) / 2.0
+                combined_risk = slt_combined
                 print(f"[SLT] Long answer but no per-sentence probe data: using SLT-direct fallback", flush=True)
 
         if combined_risk < 0.35:

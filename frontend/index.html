@@ -205,9 +205,10 @@
                     <div class="guide-item">
                         <span class="guide-label">Combined Risk</span>
                         <span class="guide-desc">For <strong>short answers</strong> (&le;100 tokens):
-                            <code>(energy_risk + entropy_risk) / 2</code>.
+                            <code>0.5 &times; slt_combined + 0.5 &times; mean(per_sentence_risks)</code>,
+                            where <code>slt_combined = 0.70 &times; energy_risk + 0.30 &times; entropy_risk</code>.
                             For <strong>long answers</strong> (&gt;100 tokens): a weighted blend of the overall SLT
-                            entropy risk (15%), the highest per-sentence probe risk (adaptive weight), and the mean
+                            combined risk (15%), the highest per-sentence probe risk (adaptive weight), and the mean
                             per-sentence probe risk (remaining weight). This ensures long multi-sentence responses are
                             scored by their most risky claims, not just the overall SLT signal.</span>
                     </div>
@@ -240,8 +241,8 @@
                         <span class="guide-label">Sentence Probe Risk</span>
                         <span class="guide-desc">Per-sentence hallucination risk using two trained probes (SLT mode only).
                             Hidden states at each sentence's last token are extracted and scored by both the energy probe
-                            and entropy probe. Combined via AUROC-weighted average: entropy 51.5% + energy 48.5%. When
-                            probe risk &ge;0.65, the sentence is flagged as low confidence (overrides the logit-based level).</span>
+                            and entropy probe. Combined weighted average: energy 70% + entropy 30%. The probe risk
+                            directly sets the sentence confidence level: &ge;65% = RISK, 35-65% = WARN, &lt;35% = OK.</span>
                     </div>
                     <div class="guide-item">
                         <span class="guide-label">Sentence Avg Conf</span>
