@@ -267,8 +267,7 @@ document.querySelectorAll('.dropdown-item').forEach(item => {
 
         // Trigger model switch on backend with loading overlay
         showLoadingOverlay(newModelId);
-        const isLocal = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
-        const baseUrl = isLocal ? 'http://localhost:8000' : '';
+        const baseUrl = getBaseUrl();
         try {
             const res = await apiFetch(`${baseUrl}/switch_model`, {
                 method: 'POST',

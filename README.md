@@ -21,17 +21,119 @@ This implementation extends the original paper with **linear probes trained on h
 
 ---
 
-## Hardware Requirements
+## Prerequisites
+
+Before starting, make sure you have:
+
+- [ ] **Python 3.12** — [Download](https://www.python.org/downloads/). Verify: `python --version`
+- [ ] **NVIDIA GPU with CUDA 12.4 drivers** — [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads). Verify: `nvidia-smi`
+- [ ] **15 GB free disk space** — for model weights (~10 GB) + Python packages (~5 GB)
+- [ ] **16 GB RAM** minimum
+- [ ] **Git** — [Download](https://git-scm.com/downloads)
+- [ ] **Hugging Face account** — free, required for downloading the LLM (see below)
+
+### Hardware Requirements
 
 | Requirement | Details |
 |---|---|
-| **Python** | 3.12 (recommended) |
 | **GPU** | NVIDIA GPU with CUDA 12.4 — **required**, CPU not supported |
 | **VRAM** | 10–12 GB (Llama 3.1 8B in 8-bit quantization) |
-| **Disk Space** | ~10 GB (model weights downloaded on first run) |
+| **Disk Space** | ~15 GB (model weights + packages) |
 | **RAM** | 16 GB minimum |
 
 > Tested on NVIDIA RTX 3060 12 GB. The model loads at ~9 GB VRAM with `bitsandbytes` 8-bit quantization.
+
+---
+
+## Hugging Face Setup
+
+The default model (Llama 3.1 8B Instruct) is a **gated model** — you need to accept Meta's license before downloading.
+
+1. **Create an account** at [huggingface.co](https://huggingface.co/join)
+2. **Accept the Llama 3.1 license** — go to [meta-llama/Llama-3.1-8B-Instruct](https://huggingface.co/meta-llama/Llama-3.1-8B-Instruct) and click **"Agree and access repository"**. Approval is usually instant.
+3. **Generate an access token** — go to [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens), create a token with **Read** access
+4. **Log in from terminal:**
+   ```bash
+   pip install huggingface_hub
+   huggingface-cli login
+   # Paste your token when prompted
+   ```
+
+> **Qwen3 8B** does not require license acceptance — it works without a Hugging Face token.
+
+---
+
+## Quick Setup (Local)
+
+```bash
+git clone https://github.com/DangerDudeSL/SemanticEnergyV1.git
+cd SemanticEnergyV1
+```
+
+**Create virtual environment:**
+
+```bash
+python -m venv .venv
+```
+
+**Activate it:**
+
+| OS | Command |
+|---|---|
+| Windows (PowerShell) | `.venv\Scripts\activate` |
+| Windows (CMD) | `.venv\Scripts\activate.bat` |
+| Linux / macOS | `source .venv/bin/activate` |
+
+**Install dependencies (order matters!):**
+
+```bash
+# Step 1: Install PyTorch with CUDA support FIRST
+pip install torch --index-url https://download.pytorch.org/whl/cu124
+
+# Step 2: Install remaining dependencies
+pip install -r requirements.txt
+```
+
+> **Important:** If you run `pip install -r requirements.txt` first, PyTorch may install from PyPI without CUDA support. Always install torch with the CUDA index URL first.
+
+---
+
+## Running Locally
+
+**Windows (PowerShell) — one command:**
+```powershell
+.\start.ps1
+```
+
+**Linux / macOS — one command:**
+```bash
+chmod +x start.sh   # first time only
+./start.sh
+```
+
+**Manual start (any OS):**
+```bash
+# Terminal 1 — Backend (loads Llama 3.1 8B, takes ~60s on first run)
+cd backend && python app.py
+# API at http://127.0.0.1:8000
+
+# Terminal 2 — Frontend
+cd frontend && python -m http.server 3000
+# Open http://127.0.0.1:3000
+```
+
+---
+
+## First Run Expectations
+
+On the **very first run**, the backend downloads the full model weights from Hugging Face:
+
+- **Download size:** ~10 GB (Llama 3.1 8B fp16 weights, quantized to ~9 GB in VRAM)
+- **Download time:** 10–30 minutes depending on your internet speed
+- **Where they're stored:** `~/.cache/huggingface/` (Linux/macOS) or `%USERPROFILE%\.cache\huggingface\` (Windows)
+- **Subsequent runs** use the cached weights and start in ~60 seconds
+
+The loading overlay in the UI will show "Loading Model" while this happens. The `/status` endpoint returns `{"ready": false}` until the model is loaded.
 
 ---
 
@@ -43,7 +145,7 @@ SemanticEnergy/
 │   ├── app.py                  # FastAPI server — /chat, /score_fast_tbg, /score_fast_slt
 │   ├── engine.py               # SemanticEngine: generation, clustering, probes, energy
 │   ├── claim_filter.py         # Claim sentence filtering
-│   ├── data/                   # Generated datasets & checkpoints (gitignored)
+│   ├── data/                   # Generated datasets & checkpoints (gitignored, NOT needed to run)
 │   └── models/
 │       ├── probes_llama3-8b_triviaqa.pkl   # Trained probes for Llama 3.1 8B
 │       └── probes_qwen3-8b_triviaqa.pkl    # Trained probes for Qwen3 8B
@@ -57,49 +159,18 @@ SemanticEnergy/
 │   ├── 01_generate_dataset.ipynb   # Collect 500 TriviaQA records with hidden states
 │   ├── 02_train_se_probes.ipynb    # Train & evaluate 4 probes, save bundle
 │   └── 04_sentence_baseline.ipynb  # B1 per-sentence logit confidence baseline
+├── docs/
+│   ├── CODE_GUIDE.md           # Developer guide — functions, data flow, algorithms
+│   ├── scoring_formulas.md     # All scoring formulas and thresholds
+│   └── ...                     # Additional technical docs
 ├── SemanticEnergy_Colab.ipynb  # Colab deployment notebook (backend on free T4 GPU)
 ├── start.ps1                   # One-command local launcher (Windows/PowerShell)
+├── start.sh                    # One-command local launcher (Linux/macOS)
 ├── requirements.txt            # Python dependencies
 └── README.md
 ```
 
----
-
-## Quick Setup (Local)
-
-```bash
-git clone https://github.com/DangerDudeSL/SemanticEnergyV1.git
-cd SemanticEnergyV1
-
-python -m venv .venv
-.venv\Scripts\activate           # Windows
-# source .venv/bin/activate      # Linux/macOS
-
-pip install torch --index-url https://download.pytorch.org/whl/cu124
-pip install -r requirements.txt
-```
-
----
-
-## Running Locally
-
-**Windows (PowerShell) — one command:**
-```powershell
-.\start.ps1
-```
-
-**Manual start:**
-```bash
-# Terminal 1 — Backend (loads Llama 3.1 8B, takes ~60s on first run)
-cd backend && python app.py
-# API at http://127.0.0.1:8000
-
-# Terminal 2 — Frontend
-cd frontend && python -m http.server 3000
-# Open http://127.0.0.1:3000
-```
-
-> **First run:** Llama 3.1 8B Instruct (~16 GB fp16, ~9 GB in 8-bit) is downloaded automatically from Hugging Face. You need a Hugging Face account and must accept the model's license at [meta-llama/Llama-3.1-8B-Instruct](https://huggingface.co/meta-llama/Llama-3.1-8B-Instruct).
+> **Note:** The `backend/data/` directory (up to 18 GB) contains generated datasets for probe training. It is gitignored and **not needed** to run the application. The pre-trained probes are already included in `backend/models/` (~4 MB total).
 
 ---
 
@@ -257,8 +328,8 @@ Higher SE score = higher confidence = lower hallucination risk.
 ### Token Positions for Probes
 
 ```
-Prompt tokens:  [t1, t2, ..., tN]   ← TBG = hidden state at tN (last prompt token)
-Answer tokens:  [a1, a2, ..., aM, EOS]  ← SLT = hidden state at aM (second-to-last)
+Prompt tokens:  [t1, t2, ..., tN]   <- TBG = hidden state at tN (last prompt token)
+Answer tokens:  [a1, a2, ..., aM, EOS]  <- SLT = hidden state at aM (second-to-last)
 ```
 
 Both positions are extracted via a **separate forward pass** on `prompt + answer` using `output_hidden_states=True`, reading all 33 transformer layers. The probe uses a 4-layer window (e.g., layers 21–25) concatenated and flattened as input features.
@@ -269,16 +340,18 @@ Both positions are extracted via a **separate forward pass** on `prompt + answer
 
 The recommended deployment architecture for demos and testing. **Total cost: $0.**
 
+For detailed deployment instructions, see [docs/DEPLOYMENT_PLAN.md](docs/DEPLOYMENT_PLAN.md).
+
 ```
-┌──────────────────┐                          ┌─────────────────────────┐
-│  Vercel (FREE)   │        HTTPS/JSON        │  Google Colab (FREE)    │
-│                  │ ──────────────────────>   │                         │
-│  index.html      │                          │  FastAPI (app.py)       │
-│  script.js       │   ngrok static domain    │  engine.py              │
-│  styles.css      │ <──────────────────────  │  probes.pkl (from HF)   │
-│                  │                          │  Llama 3.1 8B on T4     │
-│  Permanent URL   │                          │  12h session (restart)  │
-└──────────────────┘                          └─────────────────────────┘
++-----------------+                          +-------------------------+
+|  Vercel (FREE)  |        HTTPS/JSON        |  Google Colab (FREE)    |
+|                 | ---------------------->  |                         |
+|  index.html     |                          |  FastAPI (app.py)       |
+|  script.js      |   ngrok static domain    |  engine.py              |
+|  styles.css     | <----------------------  |  probes.pkl (from HF)   |
+|                 |                          |  Llama 3.1 8B on T4     |
+|  Permanent URL  |                          |  12h session (restart)  |
++-----------------+                          +-------------------------+
 ```
 
 ### Step 1: Set Up ngrok (one-time)
@@ -293,9 +366,9 @@ The recommended deployment architecture for demos and testing. **Total cost: $0.
 2. Import the `SemanticEnergy` GitHub repo
 3. Set **root directory** to `frontend/`
 4. Deploy — gives you a permanent URL like `semantic-energy.vercel.app`
-5. In `frontend/script.js`, set `BACKEND_URL` to your ngrok static domain:
+5. In `frontend/script.js`, set `NGROK_DOMAIN` to your ngrok static domain:
    ```javascript
-   const BACKEND_URL = 'https://abc123.ngrok-free.dev';
+   const NGROK_DOMAIN = 'https://abc123.ngrok-free.dev';
    ```
 
 ### Step 3: Start Backend on Colab (each session)
@@ -321,6 +394,51 @@ Semantic Energy requires **full per-token logits** from the language model. Most
 | **Google Gemini** | No | No |
 | **Together AI** | Full logprobs | Possible with code changes |
 | **Self-hosted vLLM** | Full logits | Fully compatible |
+
+---
+
+## Troubleshooting
+
+### `bitsandbytes` fails to install or import
+
+`bitsandbytes` requires the CUDA toolkit. On Windows, version >= 0.43 includes native support. Make sure:
+- NVIDIA drivers are installed (`nvidia-smi` should show your GPU)
+- CUDA 12.4 toolkit is installed
+- Try: `pip install bitsandbytes --upgrade`
+
+### `torch.cuda.is_available()` returns `False`
+
+PyTorch was installed without CUDA support. Fix:
+```bash
+pip uninstall torch
+pip install torch --index-url https://download.pytorch.org/whl/cu124
+```
+
+### Out of VRAM / CUDA out of memory
+
+- You need 10+ GB VRAM. Close other GPU-using applications (games, other models, Jupyter notebooks).
+- 8-bit quantization is enabled by default. If you still run out, the GPU may not have enough VRAM.
+
+### Model download fails / 401 Unauthorized
+
+- Run `huggingface-cli login` and paste your access token
+- Make sure you accepted the model license on the [Llama 3.1 8B page](https://huggingface.co/meta-llama/Llama-3.1-8B-Instruct)
+- Qwen3 8B does not require license acceptance
+
+### Import errors (`ModuleNotFoundError`)
+
+Make sure you activated the virtual environment before installing:
+```bash
+# Check which python is active
+python -c "import sys; print(sys.prefix)"
+# Should show .venv path, not system Python
+```
+
+### Backend starts but frontend can't connect
+
+- Make sure both servers are running (backend on port 8000, frontend on port 3000)
+- Check that ports aren't already in use: `netstat -an | grep 8000`
+- For cloud deployment: verify `NGROK_DOMAIN` in `frontend/script.js` matches your ngrok static domain
 
 ---
 

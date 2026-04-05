@@ -15,8 +15,7 @@ datasets>=3.0.0
 tqdm>=4.66.0
 matplotlib>=3.9.0
 
-# Sentence segmentation (for Phase 6 sentence baseline)
-spacy>=3.7.0
+# Sentence segmentation
 pysbd>=0.3.4
 
 # Utilities
