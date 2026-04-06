@@ -180,7 +180,7 @@ Runs a **separate forward pass** on `prompt + answer` to extract hidden states a
 3. Stack hidden states: shape `(num_layers, seq_len, hidden_dim)` — e.g., (33, 150, 4096)
 4. Extract:
    - **TBG hidden:** at `prompt_len - 1` (last prompt token)
-   - **SLT hidden:** at `full_len - 2` (second-to-last answer token)
+   - **SLT hidden:** at `max(prompt_len, full_len - 2)` (second-to-last answer token, clamped to first answer token for 1-token answers)
    - **Extra hiddens:** at caller-specified answer-relative positions (for per-sentence probes)
 - **Returns:** `(tbg_hidden, slt_hidden, extra_hiddens)` as numpy arrays of shape `(num_layers, hidden_dim)`
 
@@ -194,7 +194,7 @@ Runs a **separate forward pass** on `prompt + answer` to extract hidden states a
 5. Predict: `energy_confidence = probe.predict_proba(X)[0, 1]`
 6. `energy_risk = 1.0 - energy_confidence` (invert: probe predicts correctness)
 7. Repeat for entropy probe (different layer range)
-8. `combined_risk = (energy_risk + entropy_risk) / 2.0`
+8. `combined_risk = 0.70 * energy_risk + 0.30 * entropy_risk` (matches SLT weighting)
 9. Map: < 0.35 = "high", < 0.65 = "medium", >= 0.65 = "low"
 
 **Returns:** `{mode, energy_risk, entropy_risk, combined_risk, confidence_level}`
@@ -406,7 +406,7 @@ app.py score_fast_slt() [line 247]
         |-- _extract_hidden_states(question, answer, sent_end_positions) [engine.py:351]
         |     |-- Single forward pass with output_hidden_states=True
         |     |-- Extract TBG hidden @ prompt_len - 1
-        |     |-- Extract SLT hidden @ full_len - 2
+        |     |-- Extract SLT hidden @ max(prompt_len, full_len - 2)
         |     +-- Extract sentence-end hiddens at each claim's last token
         |
         |-- Overall SLT probe scoring:
@@ -560,7 +560,7 @@ For each of 500–1000 TriviaQA questions, the notebook:
 5. **Computes correctness:** normalized substring match against TriviaQA reference aliases. Used for evaluation only — probes are NOT trained on correctness labels.
 6. **Extracts hidden states** via a separate forward pass on `prompt + answer`:
    - TBG hidden: `(33 layers, 4096 dims)` at last prompt token
-   - SLT hidden: `(33 layers, 4096 dims)` at second-to-last answer token
+   - SLT hidden: `(33 layers, 4096 dims)` at second-to-last answer token (clamped to first answer token for 1-token answers)
 7. **Extracts logit features:** mean/min/std of chosen-token logits, mean/min/std of top-2 logit margins, answer length
 
 Each record is saved to `backend/data/probe_dataset_{model}_{dataset}.pkl` (~540 MB for 1000 questions).

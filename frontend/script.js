@@ -557,9 +557,9 @@ function appendMetricsPanel(messageEl, metricsData) {
 
     if (metricsData.type === 'probe') {
         [
-            ['Energy risk',   metricsData.energy_risk],
-            ['Entropy risk',  metricsData.entropy_risk],
-            ['Combined risk', metricsData.combined_risk],
+            ['Total Energy risk',   metricsData.energy_risk],
+            ['Total Entropy risk',  metricsData.entropy_risk],
+            ['Total Combined risk', metricsData.combined_risk],
         ].forEach(([label, val]) => {
             panel.appendChild(buildMetricRow(label, val.toFixed(3), val * 100));
         });
@@ -812,7 +812,7 @@ async function sendMessage() {
             appendConfidenceBadge(msgEl, {
                 score: 1.0 - tbgData.combined_risk,
                 level: tbgData.confidence_level,
-                mode:  'Fast TBG ⚡',
+                mode:  'Fast TBG',
             });
             appendTimer(msgEl, elapsed);
             appendMetricsPanel(msgEl, {

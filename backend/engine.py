@@ -219,7 +219,7 @@ class SemanticEngine:
 
         Returns list[dict] with keys: text, confidence, level, num_tokens,
         mean_chosen_logit, mean_logit_margin.
-        Returns empty list if answer has fewer than 2 sentences.
+        Returns empty list if no sentences found.
         """
         sentences = self.split_into_sentences(answer_text)
         if not sentences:
@@ -372,7 +372,7 @@ class SemanticEngine:
         full_inputs = self.tokenizer(full_text, return_tensors="pt").to("cuda:0")
         full_len = full_inputs.input_ids.shape[1]
 
-        if full_len <= prompt_len + 1:
+        if full_len <= prompt_len:
             return None, None, []
 
         with torch.no_grad():
@@ -383,7 +383,8 @@ class SemanticEngine:
         hidden = hidden[:, 0, :, :].float().cpu()            # (num_layers, seq_len, hidden_dim)
 
         tbg_hidden = hidden[:, prompt_len - 1, :].numpy()   # (num_layers, hidden_dim)
-        slt_hidden = hidden[:, full_len - 2, :].numpy()     # (num_layers, hidden_dim)
+        slt_pos = max(prompt_len, full_len - 2)              # clamp to first answer token for 1-token answers
+        slt_hidden = hidden[:, slt_pos, :].numpy()            # (num_layers, hidden_dim)
 
         # Extract hidden states at sentence-boundary positions
         extra_hiddens = []
@@ -442,7 +443,7 @@ class SemanticEngine:
         X_h = probe_bundle["tbg_entropy_scaler"].transform(X_tbg_h)
         entropy_risk = probe_bundle["tbg_entropy_probe"].predict_proba(X_h)[0, 1]
 
-        combined_risk = (energy_risk + entropy_risk) / 2.0
+        combined_risk = 0.70 * energy_risk + 0.30 * entropy_risk
         if combined_risk < 0.35:
             level = "high"
         elif combined_risk < 0.65:
@@ -506,14 +507,20 @@ class SemanticEngine:
 
         if slt_hidden is None:
             valid_confs = [s["confidence"] for s in sentence_scores if s["confidence"] is not None]
-            sa_conf = float(np.mean(valid_confs)) if valid_confs else None
+            if valid_confs:
+                sa_conf = float(np.mean(valid_confs))
+                fallback_risk = 1.0 - sa_conf
+            else:
+                sa_conf = None
+                fallback_risk = 0.5
+            level = "high" if fallback_risk < 0.35 else ("medium" if fallback_risk < 0.65 else "low")
             return {
                 "mode": "slt_post_generation",
                 "answer": answer_text,
-                "energy_risk": 0.5,
-                "entropy_risk": 0.5,
-                "combined_risk": 0.5,
-                "confidence_level": "medium",
+                "energy_risk": fallback_risk,
+                "entropy_risk": fallback_risk,
+                "combined_risk": fallback_risk,
+                "confidence_level": level,
                 "sentence_scores": sentence_scores,
                 "sentence_avg_confidence": round(sa_conf, 4) if sa_conf is not None else None,
                 "error": "answer too short for SLT extraction",
@@ -534,8 +541,8 @@ class SemanticEngine:
         # Per-sentence dual-probe scoring (energy + entropy) on sentence-end hidden states
         # Only run on claim sentences (non-claims were excluded from valid_positions)
         # Energy probe weighted higher — more reliable in practice
-        W_ENERGY  = 0.70
-        W_ENTROPY = 0.30
+        W_ENERGY  = 0.65
+        W_ENTROPY = 0.35
 
         if sent_hiddens and sentence_scores:
             valid_idx = 0
@@ -593,12 +600,19 @@ class SemanticEngine:
 
                 # Set level directly from combined probe risk (both directions)
                 if probe_risk is not None:
-                    if probe_risk >= 0.65:
+                    if probe_risk >= 0.70:
                         sentence_scores[si]["level"] = "low"      # RISK
-                    elif probe_risk >= 0.35:
+                    elif probe_risk >= 0.45:
                         sentence_scores[si]["level"] = "medium"   # WARN
                     else:
                         sentence_scores[si]["level"] = "high"     # OK
+
+                    # Override: if combined risk is low but any individual probe
+                    # signals extreme risk (>= 0.90), flag as medium (yellow)
+                    if sentence_scores[si]["level"] == "high":
+                        if ((sent_energy_risk is not None and sent_energy_risk >= 0.90) or
+                                (sent_entropy_risk is not None and sent_entropy_risk >= 0.90)):
+                            sentence_scores[si]["level"] = "medium"   # WARN: individual probe spike
 
         # ── Aggregate scoring: token-length conditional ──────────────────────
         TOKEN_THRESHOLD = 100  # matches probe training distribution (TriviaQA short answers)
@@ -659,10 +673,10 @@ class SemanticEngine:
         else:
             level = "low"
 
-        # Sentence-averaged confidence (claim sentences only)
-        valid_confs = [s["confidence"] for s in sentence_scores
-                       if s["confidence"] is not None and s.get("is_claim", True)]
-        sentence_avg_confidence = float(np.mean(valid_confs)) if valid_confs else None
+        # Sentence-averaged risk (claim sentences only, based on combined probe risk)
+        valid_risks = [s["probe_risk"] for s in sentence_scores
+                       if s.get("probe_risk") is not None and s.get("is_claim", True)]
+        sentence_avg_confidence = round(1.0 - float(np.mean(valid_risks)), 4) if valid_risks else None
 
         return {
             "mode": "slt_post_generation",
