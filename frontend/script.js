@@ -159,6 +159,19 @@ async function pollBackendStatus() {
             const res = await apiFetch(`${baseUrl}/status`);
             const data = await res.json();
             if (data.ready) {
+                // Sync dropdown to match the model the backend actually loaded
+                if (data.model_id && data.model_id !== selectedModelId) {
+                    selectedModelId = data.model_id;
+                    const matchingItem = document.querySelector(
+                        `.dropdown-item[data-model-id="${data.model_id}"]`
+                    );
+                    if (matchingItem) {
+                        dropdownLabel.textContent = matchingItem.dataset.label;
+                        document.querySelectorAll('.dropdown-item').forEach(i => i.classList.remove('active'));
+                        matchingItem.classList.add('active');
+                    }
+                    savePrefs();
+                }
                 hideLoadingOverlay();
                 return;
             }
@@ -436,12 +449,12 @@ function addMessageWithSentenceScores(text, sentenceScores) {
                     span.classList.add('sentence-low');
                 }
 
-                // Build tooltip with both logit confidence and probe risk
+                // Build tooltip with all scoring signals
                 const parts = [];
-                if (s.confidence != null) parts.push(`Logit confidence: ${(s.confidence * 100).toFixed(1)}%`);
                 if (s.energy_risk != null) parts.push(`Energy risk: ${(s.energy_risk * 100).toFixed(1)}%`);
                 if (s.entropy_risk != null) parts.push(`Entropy risk: ${(s.entropy_risk * 100).toFixed(1)}%`);
-                if (s.probe_risk != null) parts.push(`Combined risk: ${(s.probe_risk * 100).toFixed(1)}%`);
+                if (s.confidence != null) parts.push(`Logit conf: ${(s.confidence * 100).toFixed(1)}%`);
+                if (s.probe_risk != null) parts.push(`Blended risk: ${(s.probe_risk * 100).toFixed(1)}%`);
                 if (parts.length) span.title = parts.join(' | ');
             }
 
@@ -484,18 +497,19 @@ function addTypingIndicator() {
 }
 
 function appendConfidenceBadge(messageEl, { score, level, clusters = null, mode = null }) {
-    const percentage = (score * 100).toFixed(1);
-
-    let badgeClass, iconLabel;
+    let badgeClass, iconLabel, displayPct;
     if (level === 'high') {
         badgeClass = 'conf-high';
         iconLabel  = 'High Confidence';
+        displayPct = (score * 100).toFixed(1);
     } else if (level === 'medium') {
         badgeClass = 'conf-medium';
         iconLabel  = 'Medium Confidence';
+        displayPct = (score * 100).toFixed(1);
     } else {
         badgeClass = 'conf-low';
         iconLabel  = 'Hallucination Risk';
+        displayPct = ((1.0 - score) * 100).toFixed(1);
     }
 
     const clusterInfo = clusters !== null
@@ -507,7 +521,7 @@ function appendConfidenceBadge(messageEl, { score, level, clusters = null, mode 
 
     const badge = document.createElement('div');
     badge.className = `confidence-badge ${badgeClass}`;
-    badge.innerHTML = `<div class="dot"></div><span>${iconLabel} (${percentage}%)</span>${clusterInfo}${modeInfo}`;
+    badge.innerHTML = `<div class="dot"></div><span>${iconLabel} (${displayPct}%)</span>${clusterInfo}${modeInfo}`;
     messageEl.appendChild(badge);
 }
 
@@ -649,7 +663,7 @@ function appendSentenceAnalysis(messageEl, sentenceScores) {
             ? (displayConf * 100).toFixed(0) + '%'
             : 'N/A';
         valueEl.title = hasProbe
-            ? `Combined: ${(displayConf * 100).toFixed(1)}% | Energy: ${((1-(s.energy_risk||0))*100).toFixed(1)}% | Entropy: ${((1-(s.entropy_risk||0))*100).toFixed(1)}%`
+            ? `Blended: ${(displayConf * 100).toFixed(1)}% | Energy: ${((1-(s.energy_risk||0))*100).toFixed(1)}% | Entropy: ${((1-(s.entropy_risk||0))*100).toFixed(1)}% | Logit: ${((s.confidence || 0) * 100).toFixed(1)}%`
             : `Logit confidence: ${((s.confidence || 0) * 100).toFixed(1)}%`;
 
         const bar = document.createElement('div');

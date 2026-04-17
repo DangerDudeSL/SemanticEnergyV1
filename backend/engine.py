@@ -443,10 +443,13 @@ class SemanticEngine:
         X_h = probe_bundle["tbg_entropy_scaler"].transform(X_tbg_h)
         entropy_risk = probe_bundle["tbg_entropy_probe"].predict_proba(X_h)[0, 1]
 
-        combined_risk = 0.70 * energy_risk + 0.30 * entropy_risk
-        if combined_risk < 0.35:
+        # Weights from TBG hallucination AUROC above chance (notebook 02):
+        #   TBG energy AUROC=0.6409, excess=0.1409 → 0.44
+        #   TBG entropy AUROC=0.6806, excess=0.1806 → 0.56
+        combined_risk = 0.44 * energy_risk + 0.56 * entropy_risk
+        if combined_risk < 0.40:
             level = "high"
-        elif combined_risk < 0.65:
+        elif combined_risk < 0.60:
             level = "medium"
         else:
             level = "low"
@@ -540,9 +543,11 @@ class SemanticEngine:
 
         # Per-sentence dual-probe scoring (energy + entropy) on sentence-end hidden states
         # Only run on claim sentences (non-claims were excluded from valid_positions)
-        # Energy probe weighted higher — more reliable in practice
-        W_ENERGY  = 0.65
-        W_ENTROPY = 0.35
+        # Weights proportional to hallucination-detection AUROC above chance (notebook 02):
+        #   SLT energy AUROC=0.7163, excess=0.2163 → 0.56
+        #   SLT entropy AUROC=0.6726, excess=0.1726 → 0.44
+        W_ENERGY  = 0.56
+        W_ENTROPY = 0.44
 
         if sent_hiddens and sentence_scores:
             valid_idx = 0
@@ -586,33 +591,38 @@ class SemanticEngine:
                 sentence_scores[si]["energy_risk"] = round(sent_energy_risk, 4) if sent_energy_risk is not None else None
                 sentence_scores[si]["entropy_risk"] = round(sent_entropy_risk, 4) if sent_entropy_risk is not None else None
 
-                # Combined risk: AUROC-weighted average
+                # Combined risk: AUROC-weighted probe average
                 if sent_energy_risk is not None and sent_entropy_risk is not None:
-                    probe_risk = W_ENTROPY * sent_entropy_risk + W_ENERGY * sent_energy_risk
+                    probe_only = W_ENERGY * sent_energy_risk + W_ENTROPY * sent_entropy_risk
                 elif sent_entropy_risk is not None:
-                    probe_risk = sent_entropy_risk
+                    probe_only = sent_entropy_risk
                 elif sent_energy_risk is not None:
-                    probe_risk = sent_energy_risk
+                    probe_only = sent_energy_risk
+                else:
+                    probe_only = None
+
+                # Blend in logit confidence as false-positive suppressor.
+                # Logit features are the best single discriminator (AUROC 0.808)
+                # and anchor the score for obviously confident tokens.
+                logit_conf = sentence_scores[si].get("confidence")
+                if probe_only is not None and logit_conf is not None:
+                    logit_risk = 1.0 - logit_conf
+                    probe_risk = 0.80 * probe_only + 0.20 * logit_risk
+                elif probe_only is not None:
+                    probe_risk = probe_only
                 else:
                     probe_risk = None
 
                 sentence_scores[si]["probe_risk"] = round(probe_risk, 4) if probe_risk is not None else None
 
-                # Set level directly from combined probe risk (both directions)
+                # Set level from blended risk
                 if probe_risk is not None:
-                    if probe_risk >= 0.70:
+                    if probe_risk >= 0.75:
                         sentence_scores[si]["level"] = "low"      # RISK
-                    elif probe_risk >= 0.45:
+                    elif probe_risk >= 0.55:
                         sentence_scores[si]["level"] = "medium"   # WARN
                     else:
                         sentence_scores[si]["level"] = "high"     # OK
-
-                    # Override: if combined risk is low but any individual probe
-                    # signals extreme risk (>= 0.90), flag as medium (yellow)
-                    if sentence_scores[si]["level"] == "high":
-                        if ((sent_energy_risk is not None and sent_energy_risk >= 0.90) or
-                                (sent_entropy_risk is not None and sent_entropy_risk >= 0.90)):
-                            sentence_scores[si]["level"] = "medium"   # WARN: individual probe spike
 
         # ── Aggregate scoring: token-length conditional ──────────────────────
         TOKEN_THRESHOLD = 100  # matches probe training distribution (TriviaQA short answers)
@@ -666,9 +676,9 @@ class SemanticEngine:
                 combined_risk = slt_combined
                 print(f"[SLT] Long answer but no per-sentence probe data: using SLT-direct fallback", flush=True)
 
-        if combined_risk < 0.35:
+        if combined_risk < 0.40:
             level = "high"
-        elif combined_risk < 0.65:
+        elif combined_risk < 0.60:
             level = "medium"
         else:
             level = "low"
